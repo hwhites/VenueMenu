@@ -6,16 +6,17 @@ import { supabase } from '../../../lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
 import { styles } from '../../../styles/forms';
 import { User } from '@supabase/supabase-js';
-import * as React from 'react'; // For casting CSS properties
+import * as React from 'react'; 
 
 // --- Type Definitions for Stability ---
 
 interface Message {
   id: number;
   conversation_id: string;
-  sender_id: string; // user.id
+  from_user_id: string; // FIX: Corrected column name to match database context
   body: string;
   created_at: string;
+  system_flags?: { [key: string]: any }; // Optional system flags
 }
 
 interface Offer {
@@ -41,9 +42,12 @@ interface OfferDetails {
 
 type ChatItem = Message | Offer;
 
+interface ConversationRPCResult {
+  conversation_id: string;
+}
+
 // --- Offer Card Component (Nested Component Fix) ---
 
-// FIX: Explicitly type props
 const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
     offer: Offer, 
     userRole: string, 
@@ -57,12 +61,12 @@ const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
     pending: { backgroundColor: '#4b5563', color: '#f9fafb' },
     accepted: { backgroundColor: '#16a34a', color: '#f9fafb' },
     declined: { backgroundColor: '#dc2626', color: '#f9fafb' },
-    countered: { backgroundColor: '#f59e0b', color: '#f9fafb' }, // Added for completeness
+    countered: { backgroundColor: '#f59e0b', color: '#f9fafb' }, 
   };
 
   return (
     <div
-      key={`offer-${offer.id}`} // Use offer.id for key
+      key={`offer-${offer.id}`} 
       style={{
         alignSelf: 'center',
         width: '80%',
@@ -85,12 +89,12 @@ const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
         <h4 style={{ margin: 0, color: '#f9fafb' }}>Official Offer</h4>
         <span
           style={{
-            ...statusStyles[offer.status], // Safely access status styles
+            ...statusStyles[offer.status], 
             padding: '0.25rem 0.75rem',
             borderRadius: '12px',
             fontSize: '0.8rem',
             textTransform: 'capitalize',
-          } as React.CSSProperties} // Cast to bypass style property errors
+          } as React.CSSProperties} 
         >
           {offer.status}
         </span>
@@ -147,7 +151,6 @@ const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
 // --- Main Component ---
 
 export default function ConversationPage() {
-  // FIX: Explicitly type all states
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -157,7 +160,7 @@ export default function ConversationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
-  const [offerDetails, setOfferDetails] = useState<OfferDetails>({ // Use typed state
+  const [offerDetails, setOfferDetails] = useState<OfferDetails>({ 
     date: '',
     pay_amount: '',
     set_count: '',
@@ -165,11 +168,9 @@ export default function ConversationPage() {
     other_terms: '',
   });
   
-  // FIX: Use ref for scrolling for cleaner handling
   const messagesEndRef = useRef<HTMLDivElement>(null); 
 
   const router = useRouter();
-  // FIX: Explicitly type useParams return
   const params = useParams() as { id: string }; 
   const otherUserId = params.id;
 
@@ -183,7 +184,7 @@ export default function ConversationPage() {
         return;
       }
       const currentUser = session.user;
-      setUser(currentUser); // Set user once authenticated
+      setUser(currentUser); 
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -198,12 +199,10 @@ export default function ConversationPage() {
       }
       setUserRole(profile.role);
       
-      // Determine Artist and Venue IDs for RPC call
       const artistId =
         profile.role === 'artist' ? currentUser.id : otherUserId;
       const venueId = profile.role === 'venue' ? currentUser.id : otherUserId;
 
-      // Get/Create Conversation
       const { data: convoData, error: rpcError } = await supabase
         .rpc('get_or_create_conversation', {
           p_artist_user_id: artistId,
@@ -216,8 +215,8 @@ export default function ConversationPage() {
         setLoading(false);
         return;
       }
-
-      const currentConvoId: string = convoData.conversation_id;
+      
+      const currentConvoId: string = (convoData as ConversationRPCResult).conversation_id; 
       setConversationId(currentConvoId);
 
       // Fetch Messages
@@ -244,50 +243,45 @@ export default function ConversationPage() {
     }
   }, [otherUserId, router]);
 
-  // Scroll to bottom whenever messages/offers update
   useEffect(() => {
     if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, offers]);
 
-
-  // FIX: Explicitly type event handler and add null checks
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !conversationId || !user) return; // Guard checks
+    if (!newMessage.trim() || !conversationId || !user) return; 
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: user.id, // user is guaranteed not null here
+        from_user_id: user.id, // FIX: Corrected column name
         body: newMessage,
-      } as Message) // Cast to enforce type safety on insertion
-      .select('*, sender_id') // Select all fields plus sender_id for immediate update
+      } as Partial<Message>) // FIX: Used Partial<Message> to allow missing ID/Created_at
+      .select('*, from_user_id') 
       .single();
 
     if (error) setError(error.message);
     else {
-        // FIX: Directly update local state with new message to avoid a full re-fetch
-        setMessages(prev => [...prev, error.data as Message]);
+        setMessages(prev => [...prev, data as Message]);
         setNewMessage('');
     }
   };
   
-  // FIX: Explicitly type event handler and add null checks
   const handleSendOffer = async (e: FormEvent) => {
     e.preventDefault();
-    if (!conversationId || !user) return; // Guard checks
+    if (!conversationId || !user) return; 
 
-    const { error } = await supabase.from('offers').insert({
+    const { data: insertedOffer, error } = await supabase.from('offers').insert({
       conversation_id: conversationId,
       from_user_id: user.id,
       ...offerDetails,
       pay_amount: parseInt(offerDetails.pay_amount, 10),
       set_count: parseInt(offerDetails.set_count, 10),
       set_length_min: parseInt(offerDetails.set_length_min, 10),
-    } as Offer)
+    } as Partial<Offer>)
     .select('*')
     .single();
 
@@ -295,30 +289,24 @@ export default function ConversationPage() {
       setError(error.message);
     } else {
       setIsOfferModalOpen(false);
-      // FIX: Add system message to the message feed
-      await supabase.from('messages').insert({
+      
+      const { data: insertedMessage } = await supabase.from('messages').insert({
         conversation_id: conversationId,
-        sender_id: user.id,
+        from_user_id: user.id, // FIX: Corrected column name
         body: `SYSTEM: New Offer for ${offerDetails.date} sent.`,
-        created_at: new Date().toISOString(), // Use current time for sorting
-      } as Message);
+        created_at: new Date().toISOString(), 
+      } as Partial<Message>)
+      .select('*')
+      .single();
       
-      // FIX: Rely on a refresh or update offers manually
-      // For a quick fix, reload the conversation data
-      // In a real app, you would listen to Supabase real-time updates here
-      // For now, let's just close the modal and rely on a refetch if needed later
-      // setOffers(prev => [...prev, data as Offer]); // Assuming insert returns data
-      
-      setLoading(true); // Force a reload to get the latest offers/messages
-      router.refresh();
+      setMessages(prev => [...prev, insertedMessage as Message]);
+      setOffers(prev => [...prev, insertedOffer as Offer]);
     }
   };
 
-  // FIX: Explicitly type offer parameter
   const handleAcceptOffer = async (offer: Offer) => {
     if (!conversationId || !user || !userRole) return;
     
-    // 1. Update offer status
     const { error: updateError } = await supabase
       .from('offers')
       .update({ status: 'accepted' })
@@ -328,7 +316,6 @@ export default function ConversationPage() {
       return;
     }
     
-    // 2. Fetch required conversation data (FIX: Convo table is likely named 'Conversation')
     const { data: convo } = await supabase
       .from('Conversation') 
       .select('artist_user_id, venue_user_id')
@@ -340,66 +327,62 @@ export default function ConversationPage() {
         return;
     }
 
-    // 3. Create booking (FIX: Booking table is likely named 'Booking')
     const { error: bookingError } = await supabase.from('Booking').insert({
       artist_user_id: convo.artist_user_id,
       venue_user_id: convo.venue_user_id,
       date: offer.date,
       agreed_pay_amount: offer.pay_amount,
-      status: 'confirmed', // Must include status
+      status: 'confirmed', 
     });
     if (bookingError) {
       setError(`Booking Error: ${bookingError.message}`);
       return;
     }
 
-    // 4. Add system message (FIX: Message table is likely named 'Messages')
     const { data: newMessageData } = await supabase
       .from('Messages')
       .insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // Corrected column name to 'from_user_id'
+        from_user_id: user.id, // FIX: Corrected column name
         body: `SYSTEM: Offer for ${offer.date} accepted. Booking confirmed.`,
         created_at: new Date().toISOString(),
         system_flags: { offer_accepted: true },
-      } as Message)
+      } as Partial<Message>) // FIX: Used Partial<Message>
       .select('*')
       .single();
 
-    // Refresh local state (FIX: Use the returned data to update state)
     setOffers(
       offers.map((o) => (o.id === offer.id ? { ...o, status: 'accepted' } : o))
     );
     setMessages(prev => [...prev, newMessageData as Message]);
   };
 
-  // FIX: Explicitly type offer parameter
   const handleDeclineOffer = async (offer: Offer) => {
     if (!conversationId || !user) return;
     
-    // 1. Update offer status
-    const { error } = await supabase
+    const { data: updatedOffer, error } = await supabase
       .from('offers')
       .update({ status: 'declined' })
-      .eq('id', offer.id);
+      .eq('id', offer.id)
+      .select('*')
+      .single();
+      
     if (error) {
       setError(error.message);
       return;
     }
 
-    // 2. Add system message (FIX: Message table is likely named 'Messages')
     const { data: newMessageData } = await supabase
       .from('Messages')
       .insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // Corrected column name to 'from_user_id'
+        from_user_id: user.id, // FIX: Corrected column name
         body: `SYSTEM: Offer for ${offer.date} declined.`,
         created_at: new Date().toISOString(),
-      } as Message)
+      } as Partial<Message>) // FIX: Used Partial<Message>
       .select('*')
       .single();
 
-    // Refresh local state
     setOffers(
       offers.map((o) => (o.id === offer.id ? { ...o, status: 'declined' } : o))
     );
@@ -423,14 +406,9 @@ export default function ConversationPage() {
       </div>
     );
 
-  // Combine and sort messages and offers by creation time
-  // FIX: Ensure both types have a 'created_at' for sorting
   const chatFeed = ([...messages, ...offers] as ChatItem[]).sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
-
-  // Determine the name of the other user here (e.g., fetch in useEffect and store state)
-  // For MVP, we'll skip the name and just show "Conversation"
 
   return (
     <>
@@ -477,12 +455,9 @@ export default function ConversationPage() {
               marginBottom: '1rem',
             }}
           >
-            {/* Scroll anchor at the bottom of the feed */}
             <div ref={messagesEndRef} />
 
-            {/* We now map over a reversed copy of the chat feed */}
             {[...chatFeed].reverse().map((item) => {
-              // Check if the item is a Message by checking for the 'body' property
               if ('body' in item) { 
                 const messageItem = item as Message;
                 return (
@@ -490,9 +465,9 @@ export default function ConversationPage() {
                     key={`msg-${messageItem.id}`}
                     style={{
                       alignSelf:
-                        messageItem.sender_id === user?.id ? 'flex-end' : 'flex-start',
+                        messageItem.from_user_id === user?.id ? 'flex-end' : 'flex-start', // FIX: Check against from_user_id
                       backgroundColor:
-                        messageItem.sender_id === user?.id ? '#1d4ed8' : '#374151',
+                        messageItem.from_user_id === user?.id ? '#1d4ed8' : '#374151', // FIX: Check against from_user_id
                       padding: '0.75rem 1rem',
                       borderRadius: '12px',
                       maxWidth: '70%',
@@ -502,13 +477,12 @@ export default function ConversationPage() {
                   </div>
                 );
               } else {
-                // It's an Offer (assuming it has 'status')
                 const offerItem = item as Offer;
                 return (
                   <OfferCard
                     key={`offer-${offerItem.id}`}
                     offer={offerItem}
-                    userRole={userRole || ''} // Pass a string
+                    userRole={userRole || ''} 
                     onAccept={handleAcceptOffer}
                     onDecline={handleDeclineOffer}
                   />
@@ -525,7 +499,6 @@ export default function ConversationPage() {
               <input
                 type="text"
                 value={newMessage}
-                // FIX: Explicitly type change handler
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)}
                 style={{ ...(styles.input as any), flex: 1 }}
                 placeholder="Type your message..."
@@ -572,7 +545,6 @@ export default function ConversationPage() {
                   type="date"
                   style={styles.input as any}
                   required
-                  // FIX: Use typed handler and update state
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     setOfferDetails({ ...offerDetails, date: e.target.value })
                   }
@@ -584,7 +556,6 @@ export default function ConversationPage() {
                   type="number"
                   style={styles.input as any}
                   required
-                  // FIX: Use typed handler and update state
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     setOfferDetails({
                       ...offerDetails,
@@ -600,7 +571,6 @@ export default function ConversationPage() {
                     type="number"
                     style={styles.input as any}
                     required
-                    // FIX: Use typed handler and update state
                     onChange={(e: ChangeEvent<HTMLInputElement>) =>
                       setOfferDetails({
                         ...offerDetails,
@@ -615,7 +585,6 @@ export default function ConversationPage() {
                     type="number"
                     style={styles.input as any}
                     required
-                    // FIX: Use typed handler and update state
                     onChange={(e: ChangeEvent<HTMLInputElement>) =>
                       setOfferDetails({
                         ...offerDetails,
@@ -629,7 +598,6 @@ export default function ConversationPage() {
                 <label style={styles.label as any}>Other Terms</label>
                 <textarea
                   style={styles.textarea as any}
-                  // FIX: Use typed handler and update state
                   onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
                     setOfferDetails({
                       ...offerDetails,
