@@ -1,11 +1,13 @@
 'use client';
 
+// FIX: Added FormEvent and ChangeEvent for explicit event typing
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
 import { User } from '@supabase/supabase-js'; 
+import React from 'react'; // Added generic React import to satisfy ChangeEvent needs
 
 export default function AccountPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -52,6 +54,7 @@ export default function AccountPage() {
           setMessage('Error: Could not load your profile.');
         } else if (data) {
           
+          // FIX: Safely access the single profile object from a potential array
           const artistProfile: any = Array.isArray(data.artist_profiles) 
             ? data.artist_profiles[0] || {} 
             : data.artist_profiles || {};
@@ -81,7 +84,7 @@ export default function AccountPage() {
     }
   }, [user]);
 
-  // FIX APPLIED: Added null check for 'user'
+  // FIX: Explicitly typed 'e' as FormEvent and added null check for 'user'
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return; // Guard clause for TypeScript compiler
@@ -108,7 +111,7 @@ export default function AccountPage() {
     const { error } = await supabase
       .from(profileTable)
       .update(updateData)
-      .eq('user_id', user.id); // 'user' is guaranteed not null here
+      .eq('user_id', user.id); 
 
     if (error) {
       setMessage(`Error: ${error.message}`);
@@ -118,9 +121,17 @@ export default function AccountPage() {
     setLoading(false);
   };
 
+  // FIX: Separate logic to safely access 'checked' property
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { id, value, type, checked } = e.target;
-    const val = type === 'checkbox' ? checked : value;
+    const { id, value, type } = e.target;
+    let val: string | number | boolean = value;
+
+    // Type assertion to access 'checked' only when it's an HTMLInputElement
+    if (type === 'checkbox') {
+      const target = e.target as HTMLInputElement;
+      val = target.checked;
+    }
+
     setProfile({ ...profile, [id]: val });
   };
 
@@ -203,7 +214,8 @@ export default function AccountPage() {
                   type="text"
                   style={styles.input}
                   value={genreText}
-                  onChange={(e) => setGenreText(e.target.value)}
+                  // FIX: Explicitly typed 'e' for local handler
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setGenreText(e.target.value)}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
@@ -350,7 +362,8 @@ export default function AccountPage() {
                   type="text"
                   style={styles.input}
                   value={preferredGenreText}
-                  onChange={(e) => setPreferredGenreText(e.target.value)}
+                  // FIX: Explicitly typed 'e' for local handler
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setPreferredGenreText(e.target.value)}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
