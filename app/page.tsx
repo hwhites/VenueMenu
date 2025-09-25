@@ -22,7 +22,7 @@ export default function HomePage() {
           marginTop: '2rem',
         }}
       >
-        <h1 style={styles.header}>The Musician's Marketplace</h1>
+        <h1 style={styles.header}>The Musician&apos;s Marketplace</h1>
         <p style={styles.subHeader}>Where artists and venues connect.</p>
 
         <div

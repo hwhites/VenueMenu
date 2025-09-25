@@ -83,7 +83,7 @@ export default function LoginPage() {
           </p>
         )}
         <p style={styles.link}>
-          Don't have an account?{' '}
+          Don&apos;t have an account?{' '}
           <Link href="/signup" style={{ color: '#3b82f6' }}>
             Sign Up
           </Link>
