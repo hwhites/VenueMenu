@@ -5,11 +5,9 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
-// Import the necessary type for the user object
 import { User } from '@supabase/supabase-js'; 
 
 export default function AccountPage() {
-  // Use User | null type for state
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,8 +35,6 @@ export default function AccountPage() {
     if (user) {
       const fetchProfile = async () => {
         setLoading(true);
-        // Note: The 'profiles' table select should only be used to get the role, 
-        // as the nested select is only reliable if you ensure RLS is correct.
         const { data, error } = await supabase
           .from('profiles')
           .select(
@@ -55,9 +51,15 @@ export default function AccountPage() {
           console.error('Error fetching profile:', error);
           setMessage('Error: Could not load your profile.');
         } else if (data) {
-          // Safely pull specific profile data (use an empty object if null)
-          const artistProfile = data.artist_profiles || {};
-          const venueProfile = data.venue_profiles || {};
+          
+          // FIX APPLIED: Safely access the single profile object from a potential array
+          const artistProfile: any = Array.isArray(data.artist_profiles) 
+            ? data.artist_profiles[0] || {} 
+            : data.artist_profiles || {};
+          
+          const venueProfile: any = Array.isArray(data.venue_profiles)
+            ? data.venue_profiles[0] || {}
+            : data.venue_profiles || {};
 
           // Create the combined profile object for the state
           const profileData = {
@@ -67,7 +69,7 @@ export default function AccountPage() {
           
           setProfile(profileData);
 
-          // Use the specific profile variables to set genre text, fixing the type error
+          // Use the specific profile variables for safe property access
           if (data.role === 'artist') {
             setGenreText((artistProfile.genres || []).join(', '));
           } else {
@@ -89,7 +91,6 @@ export default function AccountPage() {
 
     const profileTable =
       profile.role === 'artist' ? 'artist_profiles' : 'venue_profiles';
-    // Destructure role, user_id, and remove any transient fields before update
     const { role, user_id, ...updateData } = profile;
 
     if (profile.role === 'artist') {
@@ -107,8 +108,7 @@ export default function AccountPage() {
     const { error } = await supabase
       .from(profileTable)
       .update(updateData)
-      // The update is performed on the user_id column of the profile table
-      .eq('user_id', user.id); 
+      .eq('user_id', user.id);
 
     if (error) {
       setMessage(`Error: ${error.message}`);
