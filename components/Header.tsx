@@ -17,7 +17,6 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Define ALL links for the single hamburger menu
   const getMenuLinks = (userRole: string | null): NavOption[] => {
     const coreLinks = [
         { name: 'Home', href: '/' },
@@ -50,7 +49,7 @@ export default function Header() {
 
   const handleLinkClick = () => {
     setIsMenuOpen(false);
-    setIsSettingsOpen(false); // Close settings menu too, for safety
+    setIsSettingsOpen(false);
   };
   
   useEffect(() => {
@@ -108,8 +107,8 @@ export default function Header() {
           VenueMenu
         </Link>
 
-        {/* Hamburger Button (ALWAYS visible, overriding desktop nav) */}
-        <div className="flex"> {/* FIX: Removed md:hidden, now always visible */}
+        {/* Hamburger Button (ALWAYS visible) */}
+        <div className="flex">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             style={{ 
@@ -134,11 +133,15 @@ export default function Header() {
                 backgroundColor: '#1f2937', 
                 position: 'absolute', 
                 top: '59px', 
-                left: 0, 
+                // FIX APPLIED: Anchor to the RIGHT and limit the width
+                right: 0, 
                 width: '100%', 
+                maxWidth: '280px', // Limit width for better alignment on large screens
                 padding: '1rem 0', 
-                zIndex: 40 
-            }}
+                zIndex: 40,
+                // FIX: Add box shadow to make it pop against content
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+            } as React.CSSProperties}
         >
             {/* Core Navigation Links */}
           {menuLinks.map((link) => (
