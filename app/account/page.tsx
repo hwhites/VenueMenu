@@ -1,14 +1,17 @@
-'use client';
+// 'use client';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
+// Add this import to get the User type from the main Supabase client library
+import { User } from '@supabase/supabase-js'; 
 
 export default function AccountPage() {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  // FIX APPLIED: Tell TypeScript the state can hold a User object OR null
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any | null>(null); // Added type for profile to avoid potential errors later
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const router = useRouter();
