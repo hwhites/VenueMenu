@@ -1,16 +1,13 @@
 'use client';
 
-// FIX: Added FormEvent and ChangeEvent for explicit event typing
 import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
-// Import the necessary type for the user object
 import { User } from '@supabase/supabase-js'; 
 
 export default function AccountPage() {
-  // FIX: Use User | null type for user state
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +52,6 @@ export default function AccountPage() {
           setMessage('Error: Could not load your profile.');
         } else if (data) {
           
-          // FIX: Safely access the single profile object from a potential array
           const artistProfile: any = Array.isArray(data.artist_profiles) 
             ? data.artist_profiles[0] || {} 
             : data.artist_profiles || {};
@@ -64,7 +60,6 @@ export default function AccountPage() {
             ? data.venue_profiles[0] || {}
             : data.venue_profiles || {};
 
-          // Create the combined profile object for the state
           const profileData = {
             role: data.role,
             ...(data.role === 'artist' ? artistProfile : venueProfile),
@@ -72,7 +67,6 @@ export default function AccountPage() {
           
           setProfile(profileData);
 
-          // Use the specific profile variables for safe property access
           if (data.role === 'artist') {
             setGenreText((artistProfile.genres || []).join(', '));
           } else {
@@ -87,9 +81,11 @@ export default function AccountPage() {
     }
   }, [user]);
 
-  // FIX: Explicitly typed 'e' as FormEvent
+  // FIX APPLIED: Added null check for 'user'
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
+    if (!user) return; // Guard clause for TypeScript compiler
+
     setMessage('');
     setLoading(true);
 
@@ -112,7 +108,7 @@ export default function AccountPage() {
     const { error } = await supabase
       .from(profileTable)
       .update(updateData)
-      .eq('user_id', user.id);
+      .eq('user_id', user.id); // 'user' is guaranteed not null here
 
     if (error) {
       setMessage(`Error: ${error.message}`);
@@ -122,14 +118,12 @@ export default function AccountPage() {
     setLoading(false);
   };
 
-  // FIX: Explicitly typed 'e' as ChangeEvent for various inputs
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value, type, checked } = e.target;
     const val = type === 'checkbox' ? checked : value;
     setProfile({ ...profile, [id]: val });
   };
 
-  // FIX: Explicitly typed 'e' as ChangeEvent for number inputs
   const handleNumberChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     const numValue = value === '' ? null : parseInt(value, 10);
