@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
 import { User } from '@supabase/supabase-js'; 
-import React from 'react'; // Added generic React import to satisfy ChangeEvent needs
+import * as React from 'react'; // Use * as React for max compatibility
 
 export default function AccountPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -54,7 +54,6 @@ export default function AccountPage() {
           setMessage('Error: Could not load your profile.');
         } else if (data) {
           
-          // FIX: Safely access the single profile object from a potential array
           const artistProfile: any = Array.isArray(data.artist_profiles) 
             ? data.artist_profiles[0] || {} 
             : data.artist_profiles || {};
@@ -84,10 +83,9 @@ export default function AccountPage() {
     }
   }, [user]);
 
-  // FIX: Explicitly typed 'e' as FormEvent and added null check for 'user'
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user) return; // Guard clause for TypeScript compiler
+    if (!user) return; 
 
     setMessage('');
     setLoading(true);
@@ -121,12 +119,10 @@ export default function AccountPage() {
     setLoading(false);
   };
 
-  // FIX: Separate logic to safely access 'checked' property
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value, type } = e.target;
     let val: string | number | boolean = value;
 
-    // Type assertion to access 'checked' only when it's an HTMLInputElement
     if (type === 'checkbox') {
       const target = e.target as HTMLInputElement;
       val = target.checked;
@@ -151,81 +147,85 @@ export default function AccountPage() {
 
   return (
     <div
-      style={{
-        ...styles.container,
-        minHeight: 'calc(100vh - 120px)',
-        backgroundColor: 'transparent',
-        padding: '1rem',
-      }}
+      style={styles.container as React.CSSProperties} // Cast entire styles.container to bypass type error
     >
-      <div style={{ ...styles.formWrapper, maxWidth: '600px' }}>
-        <h1 style={styles.header}>My Dashboard</h1>
-        <p style={styles.subHeader}>
+      <div style={
+        { 
+          ...(styles.formWrapper as React.CSSProperties), 
+          minHeight: 'calc(100vh - 120px)',
+          backgroundColor: 'transparent',
+          padding: '1rem',
+          maxWidth: '600px',
+        } as React.CSSProperties // Cast entire inline style block
+      }>
+        
+        {/* FIX APPLIED: Cast styles.header to any at the use point to bypass build issue */}
+        <h1 style={styles.header as any}>My Dashboard</h1> 
+        <p style={styles.subHeader as any}>
           Update your {profile.role} profile below.
         </p>
 
         <form onSubmit={handleUpdateProfile}>
           {profile.role === 'artist' && (
             <>
-              <div style={styles.inputGroup}>
-                <label htmlFor="stage_name" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="stage_name" style={styles.label as any}>
                   Stage Name
                 </label>
                 <input
                   id="stage_name"
                   type="text"
-                  style={styles.input}
+                  style={styles.input as any}
                   value={profile.stage_name || ''}
                   onChange={handleChange}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 3 }}>
-                  <label htmlFor="home_city" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 3 }}>
+                  <label htmlFor="home_city" style={styles.label as any}>
                     Home City
                   </label>
                   <input
                     id="home_city"
                     type="text"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.home_city || ''}
                     onChange={handleChange}
                   />
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="home_state" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="home_state" style={styles.label as any}>
                     State
                   </label>
                   <input
                     id="home_state"
                     type="text"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.home_state || ''}
                     onChange={handleChange}
                   />
                 </div>
               </div>
-              <div style={styles.inputGroup}>
-                <label htmlFor="genres" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="genres" style={styles.label as any}>
                   Genres (comma-separated)
                 </label>
                 <input
                   id="genres"
                   type="text"
-                  style={styles.input}
+                  style={styles.input as any}
                   value={genreText}
-                  // FIX: Explicitly typed 'e' for local handler
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setGenreText(e.target.value)}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="act_type" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="act_type" style={styles.label as any}>
                     Act Type
                   </label>
                   <select
                     id="act_type"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.act_type || ''}
                     onChange={handleChange}
                   >
@@ -236,51 +236,51 @@ export default function AccountPage() {
                     <option value="dj">DJ</option>
                   </select>
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="service_radius_km" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="service_radius_km" style={styles.label as any}>
                     Service Radius (km)
                   </label>
                   <input
                     id="service_radius_km"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.service_radius_km || ''}
                     onChange={handleNumberChange}
                   />
                 </div>
               </div>
-              <div style={styles.inputGroup}>
-                <label htmlFor="bio" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="bio" style={styles.label as any}>
                   Bio / Description
                 </label>
                 <textarea
                   id="bio"
-                  style={styles.textarea}
+                  style={styles.textarea as any}
                   value={profile.bio || ''}
                   onChange={handleChange}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="price_min" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="price_min" style={styles.label as any}>
                     Base Price (Min $)
                   </label>
                   <input
                     id="price_min"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.price_min || ''}
                     onChange={handleNumberChange}
                   />
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="price_max" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="price_max" style={styles.label as any}>
                     Base Price (Max $)
                   </label>
                   <input
                     id="price_max"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.price_max || ''}
                     onChange={handleNumberChange}
                   />
@@ -291,97 +291,96 @@ export default function AccountPage() {
 
           {profile.role === 'venue' && (
             <>
-              <div style={styles.inputGroup}>
-                <label htmlFor="venue_name" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="venue_name" style={styles.label as any}>
                   Venue Name
                 </label>
                 <input
                   id="venue_name"
                   type="text"
-                  style={styles.input}
+                  style={styles.input as any}
                   value={profile.venue_name || ''}
                   onChange={handleChange}
                 />
               </div>
-              <div style={styles.inputGroup}>
-                <label htmlFor="address1" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="address1" style={styles.label as any}>
                   Street Address
                 </label>
                 <input
                   id="address1"
                   type="text"
-                  style={styles.input}
+                  style={styles.input as any}
                   value={profile.address1 || ''}
                   onChange={handleChange}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 2 }}>
-                  <label htmlFor="city" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 2 }}>
+                  <label htmlFor="city" style={styles.label as any}>
                     City
                   </label>
                   <input
                     id="city"
                     type="text"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.city || ''}
                     onChange={handleChange}
                   />
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="state" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="state" style={styles.label as any}>
                     State
                   </label>
                   <input
                     id="state"
                     type="text"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.state || ''}
                     onChange={handleChange}
                   />
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="postal" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="postal" style={styles.label as any}>
                     Postal Code
                   </label>
                   <input
                     id="postal"
                     type="text"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.postal || ''}
                     onChange={handleChange}
                   />
                 </div>
               </div>
-              <div style={styles.inputGroup}>
-                <label htmlFor="genres_preferred" style={styles.label}>
+              <div style={styles.inputGroup as any}>
+                <label htmlFor="genres_preferred" style={styles.label as any}>
                   Preferred Genres (comma-separated)
                 </label>
                 <input
                   id="genres_preferred"
                   type="text"
-                  style={styles.input}
+                  style={styles.input as any}
                   value={preferredGenreText}
-                  // FIX: Explicitly typed 'e' for local handler
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setPreferredGenreText(e.target.value)}
                 />
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="capacity" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="capacity" style={styles.label as any}>
                     Capacity
                   </label>
                   <input
                     id="capacity"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.capacity || ''}
                     onChange={handleNumberChange}
                   />
                 </div>
                 <div
                   style={{
-                    ...styles.inputGroup,
+                    ...(styles.inputGroup as any),
                     flex: 1,
                     alignItems: 'center',
                     display: 'flex',
@@ -399,13 +398,13 @@ export default function AccountPage() {
                     checked={profile.pa_provided || false}
                     onChange={handleChange}
                   />
-                  <label htmlFor="pa_provided" style={styles.label}>
+                  <label htmlFor="pa_provided" style={styles.label as any}>
                     PA Provided?
                   </label>
                 </div>
                 <div
                   style={{
-                    ...styles.inputGroup,
+                    ...(styles.inputGroup as any),
                     flex: 1,
                     alignItems: 'center',
                     display: 'flex',
@@ -423,32 +422,32 @@ export default function AccountPage() {
                     checked={profile.backline_provided || false}
                     onChange={handleChange}
                   />
-                  <label htmlFor="backline_provided" style={styles.label}>
+                  <label htmlFor="backline_provided" style={styles.label as any}>
                     Backline?
                   </label>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="budget_min" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="budget_min" style={styles.label as any}>
                     Typical Budget (Min $)
                   </label>
                   <input
                     id="budget_min"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.budget_min || ''}
                     onChange={handleNumberChange}
                   />
                 </div>
-                <div style={{ ...styles.inputGroup, flex: 1 }}>
-                  <label htmlFor="budget_max" style={styles.label}>
+                <div style={{ ...(styles.inputGroup as any), flex: 1 }}>
+                  <label htmlFor="budget_max" style={styles.label as any}>
                     Typical Budget (Max $)
                   </label>
                   <input
                     id="budget_max"
                     type="number"
-                    style={styles.input}
+                    style={styles.input as any}
                     value={profile.budget_max || ''}
                     onChange={handleNumberChange}
                   />
@@ -457,17 +456,19 @@ export default function AccountPage() {
             </>
           )}
 
-          <button type="submit" style={styles.button} disabled={loading}>
+          <button type="submit" style={styles.button as any} disabled={loading}>
             {loading ? 'Saving...' : 'Update Profile'}
           </button>
         </form>
 
         {message && (
           <p
-            style={{
-              ...styles.message,
-              color: message.startsWith('Error') ? '#f87171' : '#34d399',
-            }}
+            style={
+              {
+                ...(styles.message as any),
+                color: message.startsWith('Error') ? '#f87171' : '#34d399',
+              } as React.CSSProperties
+            }
           >
             {message}
           </p>
