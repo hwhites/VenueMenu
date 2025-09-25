@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+// FIX: Added FormEvent and ChangeEvent for explicit event typing
+import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
+// Import the necessary type for the user object
 import { User } from '@supabase/supabase-js'; 
 
 export default function AccountPage() {
+  // FIX: Use User | null type for user state
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ export default function AccountPage() {
           setMessage('Error: Could not load your profile.');
         } else if (data) {
           
-          // FIX APPLIED: Safely access the single profile object from a potential array
+          // FIX: Safely access the single profile object from a potential array
           const artistProfile: any = Array.isArray(data.artist_profiles) 
             ? data.artist_profiles[0] || {} 
             : data.artist_profiles || {};
@@ -84,7 +87,8 @@ export default function AccountPage() {
     }
   }, [user]);
 
-  const handleUpdateProfile = async (e) => {
+  // FIX: Explicitly typed 'e' as FormEvent
+  const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault();
     setMessage('');
     setLoading(true);
@@ -118,13 +122,15 @@ export default function AccountPage() {
     setLoading(false);
   };
 
-  const handleChange = (e) => {
+  // FIX: Explicitly typed 'e' as ChangeEvent for various inputs
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value, type, checked } = e.target;
     const val = type === 'checkbox' ? checked : value;
     setProfile({ ...profile, [id]: val });
   };
 
-  const handleNumberChange = (e) => {
+  // FIX: Explicitly typed 'e' as ChangeEvent for number inputs
+  const handleNumberChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
     const numValue = value === '' ? null : parseInt(value, 10);
     setProfile({ ...profile, [id]: numValue });
