@@ -5,13 +5,13 @@ import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
-// Add this import to get the User type from the main Supabase client library
+// Import the necessary type for the user object
 import { User } from '@supabase/supabase-js'; 
 
 export default function AccountPage() {
-  // FIX APPLIED: Tell TypeScript the state can hold a User object OR null
+  // Use User | null type for state
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any | null>(null); // Added type for profile to avoid potential errors later
+  const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const router = useRouter();
@@ -37,6 +37,8 @@ export default function AccountPage() {
     if (user) {
       const fetchProfile = async () => {
         setLoading(true);
+        // Note: The 'profiles' table select should only be used to get the role, 
+        // as the nested select is only reliable if you ensure RLS is correct.
         const { data, error } = await supabase
           .from('profiles')
           .select(
@@ -53,18 +55,24 @@ export default function AccountPage() {
           console.error('Error fetching profile:', error);
           setMessage('Error: Could not load your profile.');
         } else if (data) {
+          // Safely pull specific profile data (use an empty object if null)
+          const artistProfile = data.artist_profiles || {};
+          const venueProfile = data.venue_profiles || {};
+
+          // Create the combined profile object for the state
           const profileData = {
             role: data.role,
-            ...(data.role === 'artist'
-              ? data.artist_profiles
-              : data.venue_profiles),
+            ...(data.role === 'artist' ? artistProfile : venueProfile),
           };
+          
           setProfile(profileData);
+
+          // Use the specific profile variables to set genre text, fixing the type error
           if (data.role === 'artist') {
-            setGenreText((profileData.genres || []).join(', '));
+            setGenreText((artistProfile.genres || []).join(', '));
           } else {
             setPreferredGenreText(
-              (profileData.genres_preferred || []).join(', ')
+              (venueProfile.genres_preferred || []).join(', ')
             );
           }
         }
@@ -81,6 +89,7 @@ export default function AccountPage() {
 
     const profileTable =
       profile.role === 'artist' ? 'artist_profiles' : 'venue_profiles';
+    // Destructure role, user_id, and remove any transient fields before update
     const { role, user_id, ...updateData } = profile;
 
     if (profile.role === 'artist') {
@@ -98,7 +107,8 @@ export default function AccountPage() {
     const { error } = await supabase
       .from(profileTable)
       .update(updateData)
-      .eq('user_id', user.id);
+      // The update is performed on the user_id column of the profile table
+      .eq('user_id', user.id); 
 
     if (error) {
       setMessage(`Error: ${error.message}`);
@@ -129,8 +139,6 @@ export default function AccountPage() {
   }
 
   return (
-    // This container div restores the vertical centering and "framed" look.
-    // We override some properties from the shared style to avoid conflict with the global layout.
     <div
       style={{
         ...styles.container,
