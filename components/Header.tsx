@@ -6,35 +6,36 @@ import { User } from '@supabase/supabase-js';
 import Link from 'next/link';
 import * as React from 'react';
 
-// FIX: Define a type for the settings options array (for theme/account menu)
-interface SettingsOption {
+interface NavOption {
     name: string;
     href: string;
 }
 
 export default function Header() {
-  // FIX: Explicitly type the user state
   const [user, setUser] = useState<User | null>(null); 
   const [role, setRole] = useState<'artist' | 'venue' | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Define Navigation Links based on role
-  const getNavLinks = (userRole: string | null): SettingsOption[] => {
+  // Define ALL links for the single hamburger menu
+  const getMenuLinks = (userRole: string | null): NavOption[] => {
+    const coreLinks = [
+        { name: 'Home', href: '/' },
+        { name: 'Inbox', href: '/messages' },
+    ];
+
     if (userRole === 'artist') {
-      return [
-        { name: 'Home', href: '/' },
-        { name: 'My Availability', href: '/availability' },
+      const artistLinks = [
+        { name: 'Availability', href: '/availability' },
         { name: 'Find Venues', href: '/discover-venues' },
-        { name: 'Inbox', href: '/messages' },
       ];
+      return [...coreLinks, ...artistLinks];
     } else if (userRole === 'venue') {
-      return [
-        { name: 'Home', href: '/' },
-        { name: 'My Needs', href: '/needs' },
+      const venueLinks = [
+        { name: 'Date Needs', href: '/needs' },
         { name: 'Find Artists', href: '/discover' },
-        { name: 'Inbox', href: '/messages' },
       ];
+      return [...coreLinks, ...venueLinks];
     }
     return [
         { name: 'Home', href: '/' },
@@ -43,18 +44,15 @@ export default function Header() {
     ];
   };
 
-  // Define Settings Menu Links (always available when logged in)
-  const settingsLinks: SettingsOption[] = [
-    { name: 'Settings', href: '/settings' },
-    { name: 'Account', href: '/account' },
+  const settingsLinks: NavOption[] = [
+    { name: 'My Profile', href: '/account' }, 
   ];
 
-  // Logic to close the main mobile menu when a link is clicked
   const handleLinkClick = () => {
     setIsMenuOpen(false);
+    setIsSettingsOpen(false); // Close settings menu too, for safety
   };
-
-  // Logic for Authentication/Role fetching
+  
   useEffect(() => {
     const fetchUserAndRole = async () => {
       const {
@@ -64,7 +62,6 @@ export default function Header() {
       setUser(session?.user ?? null); 
 
       if (session?.user) {
-        // Fetch role from profiles table (assuming the user is already authenticated)
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -82,23 +79,21 @@ export default function Header() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setRole(null);
-    setIsMenuOpen(false);
-    setIsSettingsOpen(false);
-    // Force a page refresh to clear client-side state and redirect
     window.location.href = '/'; 
   };
 
 
-  // --- JSX Structure ---
-
-  // NOTE: Style casting (as any) is used aggressively for stability with external style objects.
-  const navLinks = getNavLinks(role);
+  const menuLinks = getMenuLinks(role);
 
   return (
-    // FIX APPLIED: Component now explicitly returns JSX
-    <header style={{ backgroundColor: '#111827', padding: '1rem', color: '#f9fafb' }}>
+    <header style={{ 
+        backgroundColor: '#111827', 
+        padding: '1rem', 
+        color: '#f9fafb',
+        position: 'sticky', 
+        top: 0, 
+        zIndex: 100 
+    }}>
       <div 
         style={{ 
             display: 'flex', 
@@ -113,123 +108,44 @@ export default function Header() {
           VenueMenu
         </Link>
 
-        {/* Desktop Navigation (Visible on MD and up) */}
-        <nav className="hidden md:flex">
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                style={{ color: '#f9fafb', textDecoration: 'none', transition: 'color 0.2s' }}
-                onMouseOver={(e) => (e.currentTarget.style.color = '#9ca3af')}
-                onMouseOut={(e) => (e.currentTarget.style.color = '#f9fafb')}
-              >
-                {link.name}
-              </Link>
-            ))}
-
-            {user && (
-                <div style={{ position: 'relative' }}>
-                    <button
-                        onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                        style={{ 
-                            background: 'none', 
-                            border: '1px solid #4b5563',
-                            borderRadius: '4px',
-                            color: '#f9fafb', 
-                            padding: '0.5rem 1rem',
-                            cursor: 'pointer' 
-                        }}
-                    >
-                        Settings ⚙️
-                    </button>
-                    {isSettingsOpen && (
-                        <div 
-                            style={{ 
-                                position: 'absolute', 
-                                top: '100%', 
-                                right: 0, 
-                                backgroundColor: '#1f2937', 
-                                border: '1px solid #4b5563',
-                                borderRadius: '4px',
-                                marginTop: '8px',
-                                minWidth: '150px',
-                                zIndex: 50 
-                            }}
-                            onMouseLeave={() => setIsSettingsOpen(false)}
-                        >
-                            {settingsLinks.map((link) => (
-                                <Link
-                                    key={link.name}
-                                    href={link.href}
-                                    onClick={() => setIsSettingsOpen(false)}
-                                    style={{ 
-                                        display: 'block', 
-                                        padding: '0.75rem 1rem', 
-                                        color: '#f9fafb', 
-                                        textDecoration: 'none',
-                                    }}
-                                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#374151')}
-                                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#1f2937')}
-                                >
-                                    {link.name}
-                                </Link>
-                            ))}
-                            <button
-                                onClick={handleLogout}
-                                style={{
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    background: 'none',
-                                    border: 'none',
-                                    borderTop: '1px solid #4b5563',
-                                    color: '#f87171',
-                                    padding: '0.75rem 1rem',
-                                    cursor: 'pointer',
-                                    fontSize: '1rem'
-                                }}
-                                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#374151')}
-                                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#1f2937')}
-                            >
-                                Log Out
-                            </button>
-                        </div>
-                    )}
-                </div>
-            )}
-          </div>
-        </nav>
-
-        {/* Mobile Hamburger Button (Visible on MD and down) */}
-        <div className="md:hidden">
+        {/* Hamburger Button (ALWAYS visible, overriding desktop nav) */}
+        <div className="flex"> {/* FIX: Removed md:hidden, now always visible */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            style={{ background: 'none', border: 'none', color: '#f9fafb', fontSize: '24px', cursor: 'pointer' }}
+            style={{ 
+                background: '#1f2937', 
+                border: '1px solid #4b5563', 
+                borderRadius: '4px',
+                color: '#f9fafb', 
+                fontSize: '1.5rem', 
+                cursor: 'pointer',
+                padding: '0.25rem 0.5rem'
+            }}
           >
             {isMenuOpen ? '✕' : '☰'}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu Dropdown (Toggle visibility based on isMenuOpen state) */}
+      {/* Mobile Menu Dropdown (Now serves as the only navigation) */}
       {isMenuOpen && (
         <div 
-            className="md:hidden"
             style={{ 
                 backgroundColor: '#1f2937', 
                 position: 'absolute', 
-                top: '64px', // Adjust based on your header height
+                top: '59px', 
                 left: 0, 
                 width: '100%', 
-                padding: '1rem', 
+                padding: '1rem 0', 
                 zIndex: 40 
             }}
         >
-          {navLinks.map((link) => (
+            {/* Core Navigation Links */}
+          {menuLinks.map((link) => (
             <Link
               key={link.name}
               href={link.href}
-              onClick={handleLinkClick} // Close menu after clicking
+              onClick={handleLinkClick}
               style={{ 
                 display: 'block', 
                 padding: '0.75rem 1rem', 
@@ -243,8 +159,10 @@ export default function Header() {
               {link.name}
             </Link>
           ))}
+          
           {user && (
             <>
+                {/* Account/Profile Link */}
                 {settingsLinks.map((link) => (
                     <Link
                         key={link.name}
@@ -263,6 +181,8 @@ export default function Header() {
                         {link.name}
                     </Link>
                 ))}
+                
+                {/* Logout Button */}
                 <button
                     onClick={handleLogout}
                     style={{

@@ -1,6 +1,5 @@
 'use client';
 
-// FIX: Importing all necessary types
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useRouter, useParams } from 'next/navigation';
@@ -8,21 +7,21 @@ import { styles } from '../../../styles/forms';
 import { User } from '@supabase/supabase-js';
 import * as React from 'react'; 
 
-// --- Type Definitions for Stability ---
+// --- Type Definitions ---
 
 interface Message {
   id: number;
   conversation_id: string;
-  from_user_id: string; // FIX: Corrected column name to match database context
+  sender_id: string; // FIX: Reverted to sender_id to match your table
   body: string;
   created_at: string;
-  system_flags?: { [key: string]: any }; // Optional system flags
+  system_flags?: { [key: string]: any }; 
 }
 
 interface Offer {
   id: number;
   conversation_id: string;
-  from_user_id: string; // venue's user.id
+  from_user_id: string; // This remains from_user_id (standard for offers table)
   date: string;
   pay_amount: number;
   set_count: number;
@@ -46,7 +45,7 @@ interface ConversationRPCResult {
   conversation_id: string;
 }
 
-// --- Offer Card Component (Nested Component Fix) ---
+// --- Offer Card Component (No changes needed here) ---
 
 const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
     offer: Offer, 
@@ -257,10 +256,10 @@ export default function ConversationPage() {
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // FIX: Corrected column name
+        sender_id: user.id, // FIX APPLIED: Use sender_id
         body: newMessage,
-      } as Partial<Message>) // FIX: Used Partial<Message> to allow missing ID/Created_at
-      .select('*, from_user_id') 
+      } as Partial<Message>) 
+      .select('*, sender_id') // FIX APPLIED: Select sender_id for type compatibility
       .single();
 
     if (error) setError(error.message);
@@ -292,11 +291,11 @@ export default function ConversationPage() {
       
       const { data: insertedMessage } = await supabase.from('messages').insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // FIX: Corrected column name
+        sender_id: user.id, // FIX APPLIED: Use sender_id
         body: `SYSTEM: New Offer for ${offerDetails.date} sent.`,
         created_at: new Date().toISOString(), 
       } as Partial<Message>)
-      .select('*')
+      .select('*, sender_id') // FIX APPLIED: Select sender_id
       .single();
       
       setMessages(prev => [...prev, insertedMessage as Message]);
@@ -340,15 +339,15 @@ export default function ConversationPage() {
     }
 
     const { data: newMessageData } = await supabase
-      .from('Messages')
+      .from('messages')
       .insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // FIX: Corrected column name
+        sender_id: user.id, // FIX APPLIED: Use sender_id
         body: `SYSTEM: Offer for ${offer.date} accepted. Booking confirmed.`,
         created_at: new Date().toISOString(),
         system_flags: { offer_accepted: true },
-      } as Partial<Message>) // FIX: Used Partial<Message>
-      .select('*')
+      } as Partial<Message>) 
+      .select('*, sender_id') // FIX APPLIED: Select sender_id
       .single();
 
     setOffers(
@@ -373,14 +372,14 @@ export default function ConversationPage() {
     }
 
     const { data: newMessageData } = await supabase
-      .from('Messages')
+      .from('messages')
       .insert({
         conversation_id: conversationId,
-        from_user_id: user.id, // FIX: Corrected column name
+        sender_id: user.id, // FIX APPLIED: Use sender_id
         body: `SYSTEM: Offer for ${offer.date} declined.`,
         created_at: new Date().toISOString(),
-      } as Partial<Message>) // FIX: Used Partial<Message>
-      .select('*')
+      } as Partial<Message>) 
+      .select('*, sender_id') // FIX APPLIED: Select sender_id
       .single();
 
     setOffers(
@@ -460,14 +459,14 @@ export default function ConversationPage() {
             {[...chatFeed].reverse().map((item) => {
               if ('body' in item) { 
                 const messageItem = item as Message;
+                // FIX APPLIED: Use sender_id for comparison
+                const isMyMessage = messageItem.sender_id === user?.id; 
                 return (
                   <div
                     key={`msg-${messageItem.id}`}
                     style={{
-                      alignSelf:
-                        messageItem.from_user_id === user?.id ? 'flex-end' : 'flex-start', // FIX: Check against from_user_id
-                      backgroundColor:
-                        messageItem.from_user_id === user?.id ? '#1d4ed8' : '#374151', // FIX: Check against from_user_id
+                      alignSelf: isMyMessage ? 'flex-end' : 'flex-start',
+                      backgroundColor: isMyMessage ? '#1d4ed8' : '#374151',
                       padding: '0.75rem 1rem',
                       borderRadius: '12px',
                       maxWidth: '70%',

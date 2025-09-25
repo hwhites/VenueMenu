@@ -1,21 +1,18 @@
 'use client';
 
-// FIX: Importing FormEvent and ChangeEvent for explicit event typing
 import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
-import * as React from 'react'; // FIX: Generic React import for style casting
+import * as React from 'react';
 
 export default function LoginPage() {
-  // FIX: Explicitly type state variables
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const router = useRouter();
 
-  // FIX: Explicitly type 'e' as FormEvent
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setMessage('');
@@ -28,12 +25,11 @@ export default function LoginPage() {
     if (error) {
       setMessage(`Error: ${error.message}`);
     } else {
-      router.push('/');
-      router.refresh();
+      // FIX APPLIED: Use hard browser redirect to guarantee session update across server/client components.
+      window.location.href = '/'; 
     }
   };
 
-  // FIX: Explicitly type change handlers
   const handleEmailChange = (e: ChangeEvent<HTMLInputElement>) => {
     setEmail(e.target.value);
   };
@@ -42,7 +38,6 @@ export default function LoginPage() {
     setPassword(e.target.value);
   };
 
-  // FIX: Apply casting to all external style objects to bypass build errors
   return (
     <div
       style={
@@ -65,7 +60,6 @@ export default function LoginPage() {
               type="email"
               id="email"
               value={email}
-              // FIX: Use typed handler
               onChange={handleEmailChange}
               required
               style={styles.input as any}
@@ -79,7 +73,6 @@ export default function LoginPage() {
               type="password"
               id="password"
               value={password}
-              // FIX: Use typed handler
               onChange={handlePasswordChange}
               required
               style={styles.input as any}
