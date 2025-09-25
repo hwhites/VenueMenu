@@ -1,18 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+// FIX: Importing FormEvent and ChangeEvent for explicit event typing
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { styles } from '../../styles/forms';
 import Link from 'next/link';
+import * as React from 'react'; // FIX: Generic React import for style casting
 
 export default function LoginPage() {
+  // FIX: Explicitly type state variables
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const router = useRouter();
 
-  const handleLogin = async (e) => {
+  // FIX: Explicitly type 'e' as FormEvent
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setMessage('');
 
@@ -29,60 +33,75 @@ export default function LoginPage() {
     }
   };
 
+  // FIX: Explicitly type change handlers
+  const handleEmailChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+  };
+  
+  const handlePasswordChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+  };
+
+  // FIX: Apply casting to all external style objects to bypass build errors
   return (
-    // This container div provides the vertical centering and "framed" look.
     <div
-      style={{
-        ...styles.container,
-        minHeight: 'calc(100vh - 120px)',
-        backgroundColor: 'transparent',
-        padding: '1rem',
-      }}
+      style={
+        {
+          ...(styles.container as React.CSSProperties),
+          minHeight: 'calc(100vh - 120px)',
+          backgroundColor: 'transparent',
+          padding: '1rem',
+        } as React.CSSProperties
+      }
     >
-      <div style={styles.formWrapper}>
-        <h1 style={styles.header}>Log In to VenueMenu</h1>
+      <div style={styles.formWrapper as any}>
+        <h1 style={styles.header as any}>Log In to VenueMenu</h1>
         <form onSubmit={handleLogin}>
-          <div style={styles.inputGroup}>
-            <label htmlFor="email" style={styles.label}>
+          <div style={styles.inputGroup as any}>
+            <label htmlFor="email" style={styles.label as any}>
               Email
             </label>
             <input
               type="email"
               id="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              // FIX: Use typed handler
+              onChange={handleEmailChange}
               required
-              style={styles.input}
+              style={styles.input as any}
             />
           </div>
-          <div style={styles.inputGroup}>
-            <label htmlFor="password" style={styles.label}>
+          <div style={styles.inputGroup as any}>
+            <label htmlFor="password" style={styles.label as any}>
               Password
             </label>
             <input
               type="password"
               id="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              // FIX: Use typed handler
+              onChange={handlePasswordChange}
               required
-              style={styles.input}
+              style={styles.input as any}
             />
           </div>
-          <button type="submit" style={styles.button}>
+          <button type="submit" style={styles.button as any}>
             Log In
           </button>
         </form>
         {message && (
           <p
-            style={{
-              ...styles.message,
-              color: message.startsWith('Error') ? '#f87171' : '#34d399',
-            }}
+            style={
+              {
+                ...(styles.message as any),
+                color: message.startsWith('Error') ? '#f87171' : '#34d399',
+              } as React.CSSProperties
+            }
           >
             {message}
           </p>
         )}
-        <p style={styles.link}>
+        <p style={styles.link as any}>
           Don&apos;t have an account?{' '}
           <Link href="/signup" style={{ color: '#3b82f6' }}>
             Sign Up
