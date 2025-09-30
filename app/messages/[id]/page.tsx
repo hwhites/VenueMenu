@@ -12,7 +12,7 @@ import * as React from 'react';
 interface Message {
   id: number;
   conversation_id: string;
-  sender_id: string; // FIX: Reverted to sender_id to match your table
+  sender_id: string;
   body: string;
   created_at: string;
   system_flags?: { [key: string]: any }; 
@@ -21,7 +21,7 @@ interface Message {
 interface Offer {
   id: number;
   conversation_id: string;
-  from_user_id: string; // This remains from_user_id (standard for offers table)
+  from_user_id: string;
   date: string;
   pay_amount: number;
   set_count: number;
@@ -45,7 +45,7 @@ interface ConversationRPCResult {
   conversation_id: string;
 }
 
-// --- Offer Card Component (No changes needed here) ---
+// --- Offer Card Component ---
 
 const OfferCard = ({ offer, userRole, onAccept, onDecline }: {
     offer: Offer, 
@@ -218,14 +218,12 @@ export default function ConversationPage() {
       const currentConvoId: string = (convoData as ConversationRPCResult).conversation_id; 
       setConversationId(currentConvoId);
 
-      // Fetch Messages
       const { data: messagesData } = await supabase
         .from('messages')
         .select('*')
         .eq('conversation_id', currentConvoId)
         .order('created_at', { ascending: true });
         
-      // Fetch Offers
       const { data: offersData } = await supabase
         .from('offers')
         .select('*')
@@ -256,10 +254,10 @@ export default function ConversationPage() {
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: user.id, // FIX APPLIED: Use sender_id
+        sender_id: user.id,
         body: newMessage,
       } as Partial<Message>) 
-      .select('*, sender_id') // FIX APPLIED: Select sender_id for type compatibility
+      .select('*')
       .single();
 
     if (error) setError(error.message);
@@ -291,11 +289,11 @@ export default function ConversationPage() {
       
       const { data: insertedMessage } = await supabase.from('messages').insert({
         conversation_id: conversationId,
-        sender_id: user.id, // FIX APPLIED: Use sender_id
+        sender_id: user.id,
         body: `SYSTEM: New Offer for ${offerDetails.date} sent.`,
         created_at: new Date().toISOString(), 
       } as Partial<Message>)
-      .select('*, sender_id') // FIX APPLIED: Select sender_id
+      .select('*')
       .single();
       
       setMessages(prev => [...prev, insertedMessage as Message]);
@@ -315,8 +313,9 @@ export default function ConversationPage() {
       return;
     }
     
+    // FIX: Use the correct, lowercase table name 'conversations'
     const { data: convo } = await supabase
-      .from('Conversation') 
+      .from('conversations') 
       .select('artist_user_id, venue_user_id')
       .eq('id', conversationId)
       .single();
@@ -326,7 +325,9 @@ export default function ConversationPage() {
         return;
     }
 
-    const { error: bookingError } = await supabase.from('Booking').insert({
+    // FIX: Use the correct, lowercase table name 'bookings' and add the required 'offer_id'
+    const { error: bookingError } = await supabase.from('bookings').insert({
+      offer_id: offer.id, // This is a required field
       artist_user_id: convo.artist_user_id,
       venue_user_id: convo.venue_user_id,
       date: offer.date,
@@ -342,12 +343,12 @@ export default function ConversationPage() {
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: user.id, // FIX APPLIED: Use sender_id
+        sender_id: user.id,
         body: `SYSTEM: Offer for ${offer.date} accepted. Booking confirmed.`,
         created_at: new Date().toISOString(),
         system_flags: { offer_accepted: true },
       } as Partial<Message>) 
-      .select('*, sender_id') // FIX APPLIED: Select sender_id
+      .select('*')
       .single();
 
     setOffers(
@@ -359,12 +360,10 @@ export default function ConversationPage() {
   const handleDeclineOffer = async (offer: Offer) => {
     if (!conversationId || !user) return;
     
-    const { data: updatedOffer, error } = await supabase
+    const { error } = await supabase
       .from('offers')
       .update({ status: 'declined' })
-      .eq('id', offer.id)
-      .select('*')
-      .single();
+      .eq('id', offer.id);
       
     if (error) {
       setError(error.message);
@@ -375,11 +374,11 @@ export default function ConversationPage() {
       .from('messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: user.id, // FIX APPLIED: Use sender_id
+        sender_id: user.id,
         body: `SYSTEM: Offer for ${offer.date} declined.`,
         created_at: new Date().toISOString(),
       } as Partial<Message>) 
-      .select('*, sender_id') // FIX APPLIED: Select sender_id
+      .select('*')
       .single();
 
     setOffers(
@@ -459,7 +458,6 @@ export default function ConversationPage() {
             {[...chatFeed].reverse().map((item) => {
               if ('body' in item) { 
                 const messageItem = item as Message;
-                // FIX APPLIED: Use sender_id for comparison
                 const isMyMessage = messageItem.sender_id === user?.id; 
                 return (
                   <div
@@ -628,3 +626,4 @@ export default function ConversationPage() {
     </>
   );
 }
+
