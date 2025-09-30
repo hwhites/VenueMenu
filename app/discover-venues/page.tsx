@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { styles } from '../../styles/forms'
 import { User } from '@supabase/supabase-js'
 import * as React from 'react'
+import Link from 'next/link'
 
 // --- Type Definitions ---
 interface OpenDate {
@@ -48,23 +49,20 @@ export default function DiscoverVenuesPage() {
       }
       setUser(session.user)
 
-      // Fetch the user's role first to ensure they are an artist
       const { data: baseProfile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
       if (baseProfile?.role !== 'artist') {
-        router.push('/account') // Redirect if not an artist
+        router.push('/account')
         return
       }
 
-      // Fetch the artist's profile details needed for searching
       const { data: profile } = await supabase
         .from('artist_profiles')
         .select('price_min, genres')
         .eq('user_id', session.user.id)
         .single()
       
-      setArtistProfile(profile) // This can be null if profile is new, which is fine
+      setArtistProfile(profile)
 
-      // Fetch the artist's open dates for the dropdown
       const { data: dates } = await supabase
         .from('open_dates')
         .select('date')
@@ -86,9 +84,8 @@ export default function DiscoverVenuesPage() {
 
     const searchParams = {
       search_date: selectedDate || null,
-      // Pass the artist's details, which can be null if not set
       artist_price_min: artistProfile?.price_min || null,
-      artist_price_max: null, // Not used in this search logic
+      artist_price_max: null,
       artist_genres: artistProfile?.genres || null,
     }
 
@@ -158,9 +155,18 @@ export default function DiscoverVenuesPage() {
                     </span>
                   ))}
                 </div>
-                <p style={{ margin: 'auto 0 0 0', color: '#9ca3af', fontSize: '0.8rem', paddingTop: '1rem', borderTop: '1px solid #4b5563' }}>
+                <p style={{ margin: '0 0 1rem 0', color: '#9ca3af', fontSize: '0.8rem' }}>
                   Budget: ${venue.budget_min || '??'} - ${venue.budget_max || '??'}
                 </p>
+                 {/* ADDITION: Buttons for profile and contact */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                    <Link href={`/venue/${venue.user_id}`} style={{...(styles.button as any), flex: 1, textDecoration: 'none', textAlign: 'center', padding: '0.5rem', backgroundColor: '#4b5563' }}>
+                      Profile
+                    </Link>
+                    <Link href={`/messages/${venue.user_id}`} style={{...(styles.button as any), flex: 1, textDecoration: 'none', textAlign: 'center', padding: '0.5rem' }}>
+                      Contact
+                    </Link>
+                </div>
               </div>
             ))}
           </div>

@@ -180,7 +180,6 @@ export default function AccountPage() {
           This is your private dashboard. Use it to manage your core details for matching.
         </p>
 
-        {/* This is the section that adds the "View Public Profile" button */}
         {profile.role === 'artist' && (
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '24px', justifyContent: 'center' }}>
               <Link href="/edit-profile" style={{...styles.button as React.CSSProperties, flex: 1, display: 'inline-block', backgroundColor: '#1d4ed8', textDecoration: 'none' }}>
@@ -188,6 +187,14 @@ export default function AccountPage() {
               </Link>
               <Link href={`/artist/${user.id}`} target="_blank" style={{...styles.button as React.CSSProperties, flex: 1, display: 'inline-block', backgroundColor: '#4b5563', textDecoration: 'none' }}>
                   View Public Page
+              </Link>
+          </div>
+        )}
+
+        {profile.role === 'venue' && (
+          <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+              <Link href="/edit-venue-profile" style={{...styles.button as React.CSSProperties, display: 'inline-block', width: 'auto', backgroundColor: '#1d4ed8', textDecoration: 'none' }}>
+                  Edit My Public Profile
               </Link>
           </div>
         )}
