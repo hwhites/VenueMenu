@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabaseClient'
 import { useParams } from 'next/navigation'
 import { styles } from '../../../styles/forms'
 import * as React from 'react'
+import Image from 'next/image' // Import the Next.js Image component
 
 // --- Type Definitions ---
 interface PublicProfileData {
@@ -66,7 +67,9 @@ export default function ArtistProfilePage() {
 
       const [{ data: profileData, error: profileError }, { data: bookingsData, error: bookingsError }] = await Promise.all([profilePromise, bookingsPromise])
 
-      if (profileError) {
+      // FIX: Add a check to ensure profileData is not null before proceeding.
+      // This resolves the "possibly 'null'" build error.
+      if (profileError || !profileData) {
         setError('Artist not found.')
         console.error(profileError)
         setLoading(false)
@@ -92,9 +95,7 @@ export default function ArtistProfilePage() {
       setProfile(combinedProfile)
       
       const formattedBookings: Booking[] = (bookingsData || []).map(b => {
-        // FIX: Handle both array and object cases for joined data
         const venueProfile = Array.isArray(b.venue_profiles) ? b.venue_profiles[0] : b.venue_profiles;
-        
         return {
           id: b.id,
           date: b.date,
@@ -121,11 +122,15 @@ export default function ArtistProfilePage() {
 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
+      {/* Profile Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginBottom: '2rem' }}>
-        <img
+        {/* FIX: Replaced <img> with Next.js <Image /> for optimization */}
+        <Image
           src={profile.profile_photo_url || 'https://via.placeholder.com/150'}
           alt={`${profile.stage_name} profile photo`}
-          style={{ width: '150px', height: '150px', borderRadius: '50%', objectFit: 'cover' }}
+          width={150}
+          height={150}
+          style={{ borderRadius: '50%', objectFit: 'cover' }}
         />
         <div>
           <h1 style={{ ...styles.header as React.CSSProperties, margin: 0, fontSize: '2.5rem' }}>{profile.stage_name}</h1>
@@ -138,6 +143,7 @@ export default function ArtistProfilePage() {
         </div>
       </div>
 
+      {/* Bio and Social Links */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
         <div>
           <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.5rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>About</h2>
@@ -159,6 +165,7 @@ export default function ArtistProfilePage() {
         </div>
       </div>
 
+      {/* Gig History */}
       <div style={{ marginTop: '3rem' }}>
         <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.5rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>Gig History</h2>
         {bookings.length > 0 ? (
