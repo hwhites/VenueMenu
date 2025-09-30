@@ -1,348 +1,216 @@
-'use client';
+'use client'
 
-// FIX: Importing necessary types for strict compilation
-import { useState, useEffect, FormEvent, ChangeEvent } from 'react';
+import { useState, useEffect, useCallback, FormEvent, ChangeEvent } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { styles } from '../../styles/forms';
-import { User } from '@supabase/supabase-js'; 
+import { User } from '@supabase/supabase-js';
 import * as React from 'react';
+import { AvailabilityCalendar, DateStatus } from '../../components/AvailabilityCalendar';
 
-// FIX: Define a minimal type for the data being handled
+// --- Type Definitions ---
 interface OpenDate {
   id: number;
-  artist_user_id: string;
   date: string;
-  // Add other required properties from the 'open_dates' table here if needed
+  status: 'open' | 'booked';
 }
 
 export default function AvailabilityPage() {
-  // FIX: Explicitly type all state variables
   const [user, setUser] = useState<User | null>(null);
-  const [openDates, setOpenDates] = useState<OpenDate[]>([]);
-  const [stagedDates, setStagedDates] = useState<string[]>([]);
-  const [newDate, setNewDate] = useState<string>('');
+  const [allDates, setAllDates] = useState<Map<string, DateStatus>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const router = useRouter();
 
-  // FIX: Refactored fetch logic for clarity and safety
-  useEffect(() => {
-    const fetchUserAndDates = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      
-      if (!session) {
-        router.push('/login');
-        return;
-      }
-      
-      const currentUser = session.user;
-      setUser(currentUser); // FIX: Set User is safe now
+  // State for the editing modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [stagedDates, setStagedDates] = useState<Map<string, DateStatus>>(new Map());
+  const [recurrence, setRecurrence] = useState({ type: 'weekly', count: '4' });
+  const [isSaving, setIsSaving] = useState(false);
 
-      // 1. Role Check
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', currentUser.id)
-        .single();
-
-      if (profileError || profile?.role !== 'artist') {
-        router.push('/account'); // Redirect non-artists
-        return;
-      }
-
-      // 2. Fetch Open Dates
-      const { data: dates, error } = await supabase
-        .from('open_dates')
-        .select('*')
-        .eq('artist_user_id', currentUser.id)
-        .order('date', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching open dates:', error);
-        setMessage('Error: Could not load your open dates.');
-      } else {
-        setOpenDates(dates as OpenDate[]); // Cast data to the defined type
-      }
-      setLoading(false);
-    };
-    fetchUserAndDates();
-  }, [router]);
-
-  // FIX: Explicitly typed 'e' as FormEvent
-  const handleStageDate = (e: FormEvent) => {
-    e.preventDefault();
-    if (!newDate) return;
-
-    const newDateStr = newDate.trim();
-
-    const isAlreadyStaged = stagedDates.includes(newDateStr);
-    const isAlreadySaved = openDates.some((d) => d.date === newDateStr);
-    
-    if (isAlreadyStaged || isAlreadySaved) {
-      setMessage('Error: This date is already in your list.');
-      return;
-    }
-
-    setStagedDates([...stagedDates, newDateStr].sort());
-    setNewDate('');
-    setMessage('');
-  };
-
-  // FIX: Explicitly typed parameter
-  const handleRemoveStagedDate = (dateToRemove: string) => {
-    setStagedDates(stagedDates.filter((date) => date !== dateToRemove));
-  };
-
-  const handleSaveDates = async () => {
-    if (stagedDates.length === 0) return;
-    // FIX: Guard clause to ensure user is not null before access
-    if (!user) {
-      setMessage('Error: Session expired. Please log in.');
-      router.push('/login');
-      return;
-    }
-    
-    setIsSaving(true);
-    setMessage('');
-
-    const datesToInsert = stagedDates.map((date) => ({
-      artist_user_id: user.id, // FIX: 'user.id' is safe here
-      date: date,
-    }));
-
-    const { data, error } = await supabase
+  // --- Data Fetching ---
+  const fetchDates = useCallback(async (currentUser: User) => {
+    setLoading(true);
+    const { data, error: fetchError } = await supabase
       .from('open_dates')
-      .insert(datesToInsert)
-      .select();
+      .select('id, date, status')
+      .eq('artist_user_id', currentUser.id)
+      .in('status', ['open', 'booked']);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
-    } else if (data) {
-      const updatedDates = [...openDates, ...(data as OpenDate[])].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() // FIX: Use getTime() for reliable date sorting
-      );
-      setOpenDates(updatedDates);
-      setStagedDates([]);
-      setMessage(`Success! ${data.length} date(s) added.`);
-    }
-    setIsSaving(false);
-  };
-
-  // FIX: Explicitly typed parameter
-  const handleDeleteDate = async (id: number) => {
-    const { error } = await supabase.from('open_dates').delete().eq('id', id);
-
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (fetchError) {
+      setError(fetchError.message);
     } else {
-      setOpenDates(openDates.filter((date) => date.id !== id));
-      setMessage('Success! Date removed.');
+      const dateMap = new Map<string, DateStatus>();
+      data.forEach(d => {
+        // Normalize date to prevent timezone issues
+        const date = new Date(d.date).toISOString().split('T')[0];
+        dateMap.set(date, d.status);
+      });
+      setAllDates(dateMap);
     }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const initPage = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
+      const currentUser = session.user;
+      setUser(currentUser);
+      await fetchDates(currentUser);
+    };
+    initPage();
+  }, [router, fetchDates]);
+
+  // --- Modal and Editing Logic ---
+  const handleOpenModal = () => {
+    setStagedDates(new Map(allDates)); // Copy current dates into staging
+    setIsModalOpen(true);
   };
 
-  // FIX: Explicitly typed change handler for date input
-  const handleDateChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setNewDate(e.target.value);
+  const handleModalDateClick = (date: string) => {
+    const currentStatus = stagedDates.get(date) || 'unavailable';
+    const newStagedDates = new Map(stagedDates);
+
+    if (currentStatus === 'unavailable') {
+      newStagedDates.set(date, 'open');
+    } else if (currentStatus === 'open') {
+      newStagedDates.set(date, 'unavailable');
+    }
+    // Booked dates are not clickable
+    setStagedDates(newStagedDates);
+  };
+  
+  const handleQuickRemove = async (date: string) => {
+      if (!user || !confirm(`Are you sure you want to remove your availability for ${date}?`)) return;
+      
+      const { error: deleteError } = await supabase
+        .from('open_dates')
+        .delete()
+        .eq('artist_user_id', user.id)
+        .eq('date', date)
+        .eq('status', 'open');
+        
+      if (deleteError) setError(deleteError.message);
+      else await fetchDates(user);
   };
 
-  if (loading) {
-    return (
-      <div>
-        <p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading...</p>
-      </div>
-    );
-  }
+  const handleApplyRecurrence = () => {
+    const newDates = new Map(stagedDates);
+    const today = new Date();
+    const count = parseInt(recurrence.count, 10);
+    if (isNaN(count)) return;
 
-  // FIX: Aggressively cast styles to any/CSSProperties to bypass build errors
-  return (
-    <div
-      style={
-        {
-          ...(styles.container as React.CSSProperties),
-          minHeight: 'calc(100vh - 120px)',
-          backgroundColor: 'transparent',
-          padding: '1rem',
-        } as React.CSSProperties
+    for (let i = 0; i < count; i++) {
+        let nextDate: Date;
+        if (recurrence.type === 'weekly') {
+            nextDate = new Date(today.getTime() + (i * 7 * 24 * 60 * 60 * 1000));
+        } else if (recurrence.type === 'biweekly') {
+            nextDate = new Date(today.getTime() + (i * 14 * 24 * 60 * 60 * 1000));
+        } else { // monthly
+            nextDate = new Date(today.getFullYear(), today.getMonth() + i, today.getDate());
+        }
+        
+        const dateStr = nextDate.toISOString().split('T')[0];
+        if (!newDates.has(dateStr)) {
+            newDates.set(dateStr, 'open');
+        }
+    }
+    setStagedDates(newDates);
+  };
+
+  const handleSaveChanges = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    
+    const toAdd: { artist_user_id: string; date: string; status: 'open' }[] = [];
+    const toRemove: string[] = [];
+
+    stagedDates.forEach((status, date) => {
+      if (status === 'open' && !allDates.has(date)) {
+        toAdd.push({ artist_user_id: user.id, date, status: 'open' });
       }
-    >
-      <div style={{ ...(styles.formWrapper as React.CSSProperties), maxWidth: '600px' }}>
-        <h1 style={styles.header as any}>Manage My Availability</h1>
-        <p style={styles.subHeader as any}>
-          Add one or more dates to your list, then save them.
-        </p>
+    });
 
-        <form
-          onSubmit={handleStageDate}
-          style={{ marginBottom: '24px', display: 'flex', gap: '10px' }}
-        >
-          <div style={{ ...(styles.inputGroup as any), flex: 1, marginBottom: 0 }}>
-            <label htmlFor="newDate" style={styles.label as any}>
-              Select a date
-            </label>
-            <input
-              id="newDate"
-              type="date"
-              value={newDate}
-              onChange={handleDateChange}
-              style={styles.input as any}
-            />
-          </div>
-          <button
-            type="submit"
-            style={{ ...(styles.button as any), alignSelf: 'flex-end', width: 'auto' }}
-          >
-            + Add to List
-          </button>
-        </form>
+    allDates.forEach((status, date) => {
+      if (status === 'open' && !stagedDates.has(date)) {
+        toRemove.push(date);
+      }
+    });
+    
+    if (toAdd.length > 0) {
+        await supabase.from('open_dates').insert(toAdd);
+    }
+    if (toRemove.length > 0) {
+        await supabase.from('open_dates').delete().eq('artist_user_id', user.id).in('date', toRemove);
+    }
 
-        {stagedDates.length > 0 && (
-          <div style={{ marginBottom: '24px' }}>
-            <h2
-              style={
-                {
-                  ...(styles.header as any),
-                  fontSize: '20px',
-                  textAlign: 'left',
-                  marginBottom: '16px',
-                } as React.CSSProperties
-              }
-            >
-              New Dates to Add
-            </h2>
-            {stagedDates.map((date) => (
-              <li
-                key={date}
-                // FIX: Cast inline styles to bypass type error
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '12px',
-                  backgroundColor: '#4b5563',
-                  borderRadius: '6px',
-                  marginBottom: '8px',
-                  color: '#f9fafb',
-                  listStyle: 'none',
-                } as React.CSSProperties}
-              >
-                <span>
-                  {new Date(date).toLocaleDateString(undefined, {
-                    timeZone: 'UTC',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </span>
-                <button
-                  onClick={() => handleRemoveStagedDate(date)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#fca5a5',
-                    cursor: 'pointer',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  &times;
-                </button>
-              </li>
-            ))}
-            <button
-              onClick={handleSaveDates}
-              style={{
-                ...(styles.button as any),
-                width: '100%',
-                marginTop: '16px',
-                backgroundColor: '#16a34a',
-              }}
-              disabled={isSaving}
-            >
-              {isSaving
-                ? 'Saving...'
-                : `Save ${stagedDates.length} New Date(s)`}
-            </button>
-          </div>
-        )}
+    await fetchDates(user);
+    setIsSaving(false);
+    setIsModalOpen(false);
+  };
 
-        {message && (
-          <p
-            style={
-              {
-                ...(styles.message as any),
-                color: message.startsWith('Error') ? '#f87171' : '#34d399',
-              } as React.CSSProperties
-            }
-          >
-            {message}
+  if (loading) return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading Availability...</p></div>;
+  if (error) return <div><p style={{ textAlign: 'center', color: '#f87171', marginTop: '2rem' }}>Error: {error}</p></div>;
+
+  return (
+    <>
+      <div style={{...styles.container as React.CSSProperties, minHeight: 'calc(100vh - 120px)', backgroundColor: 'transparent', padding: '1rem', alignItems: 'flex-start' }}>
+        <div style={{...styles.formWrapper as React.CSSProperties, maxWidth: '800px'}}>
+          <h1 style={styles.header as React.CSSProperties}>My Availability</h1>
+          <p style={styles.subHeader as React.CSSProperties}>
+            Green dates are booked, yellow dates are open. Click an open date to remove it.
           </p>
-        )}
 
-        <div style={{ marginTop: '24px' }}>
-          <h2
-            style={
-              {
-                ...(styles.header as any),
-                fontSize: '20px',
-                textAlign: 'left',
-                marginBottom: '16px',
-              } as React.CSSProperties
-            }
-          >
-            Your Currently Open Dates
-          </h2>
-          {openDates.length > 0 ? (
-            <ul style={{ listStyle: 'none', padding: 0 }}>
-              {openDates.map((d) => (
-                <li
-                  key={d.id}
-                  // FIX: Cast inline styles to bypass type error
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px',
-                    backgroundColor: '#374151',
-                    borderRadius: '6px',
-                    marginBottom: '8px',
-                    color: '#f9fafb',
-                  } as React.CSSProperties}
-                >
-                  <span>
-                    {new Date(d.date).toLocaleDateString(undefined, {
-                      timeZone: 'UTC',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteDate(d.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#f87171',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    &times;
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p style={{ color: '#9ca3af', textAlign: 'center' }}>
-              You have no open dates listed.
-            </p>
-          )}
+          <button onClick={handleOpenModal} style={{...styles.button as React.CSSProperties, width: '100%', marginBottom: '2rem' }}>
+            Add / Edit Availability
+          </button>
+
+          <AvailabilityCalendar dates={allDates} onDateClick={handleQuickRemove} />
         </div>
       </div>
-    </div>
+
+      {isModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+          <div style={{...styles.formWrapper as React.CSSProperties, maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto'}}>
+            <h1 style={styles.header as React.CSSProperties}>Edit Dates</h1>
+            <p style={styles.subHeader as React.CSSProperties}>Click grey dates to mark them as open (yellow), or click yellow dates to remove them. Booked dates (green) cannot be changed.</p>
+            
+            <AvailabilityCalendar dates={stagedDates} onDateClick={handleModalDateClick} isEditable={true} />
+
+            <div style={{ marginTop: '2rem', borderTop: '1px solid #4b5563', paddingTop: '1rem' }}>
+                <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.2rem'}}>Add Recurring Dates</h2>
+                <div style={{display: 'flex', gap: '1rem', alignItems: 'flex-end'}}>
+                    <div style={{...styles.inputGroup as React.CSSProperties, flex: 2}}>
+                        <label style={styles.label as any}>Rule</label>
+                        <select value={recurrence.type} onChange={(e: ChangeEvent<HTMLSelectElement>) => setRecurrence(r => ({ ...r, type: e.target.value }))} style={styles.input as any}>
+                            <option value="weekly">Repeat Weekly</option>
+                            <option value="biweekly">Repeat Bi-Weekly</option>
+                            <option value="monthly">Repeat Monthly</option>
+                        </select>
+                    </div>
+                    <div style={{...styles.inputGroup as React.CSSProperties, flex: 1}}>
+                         <label style={styles.label as any}>For</label>
+                        <input type="number" value={recurrence.count} onChange={(e: ChangeEvent<HTMLInputElement>) => setRecurrence(r => ({ ...r, count: e.target.value }))} style={styles.input as any} />
+                    </div>
+                    <div style={{...styles.inputGroup as React.CSSProperties, flex: 1, marginBottom: '0'}}>
+                        <button type="button" onClick={handleApplyRecurrence} style={{...styles.button as any, width: '100%', padding: '0.65rem' }}>Apply</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style={{display: 'flex', gap: '1rem', marginTop: '2rem'}}>
+                <button onClick={handleSaveChanges} style={{...styles.button as React.CSSProperties, flex: 2, backgroundColor: '#16a34a'}} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button onClick={() => setIsModalOpen(false)} style={{...styles.button as React.CSSProperties, flex: 1, backgroundColor: '#4b5563'}}>
+                    Cancel
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+
