@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { styles } from '../../styles/forms'
 import { User } from '@supabase/supabase-js'
 import * as React from 'react'
-import Link from 'next/link'
+import Image from 'next/image'
 
 // Type definition for the public profile data
 interface PublicProfile {
@@ -28,6 +28,7 @@ export default function EditPublicProfilePage() {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Partial<PublicProfile>>({})
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
   const router = useRouter()
 
@@ -83,6 +84,45 @@ export default function EditPublicProfilePage() {
     }
     setLoading(false)
   }
+  
+  const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0 || !user) {
+      return
+    }
+
+    const file = event.target.files[0]
+    const fileExt = file.name.split('.').pop()
+    const filePath = `${user.id}/${Math.random()}.${fileExt}`
+
+    setUploading(true)
+    setMessage('');
+
+    const { error: uploadError } = await supabase.storage
+      .from('profile-pictures')
+      .upload(filePath, file)
+
+    if (uploadError) {
+      setMessage(`Upload Error: ${uploadError.message}`)
+      setUploading(false)
+      return
+    }
+
+    const { data } = supabase.storage
+      .from('profile-pictures')
+      .getPublicUrl(filePath)
+
+    if (data) {
+        const newUrl = data.publicUrl;
+        setProfile(p => ({ ...p, profile_photo_url: newUrl }));
+        await supabase
+            .from('artist_public_profiles')
+            .upsert({ user_id: user.id, profile_photo_url: newUrl }, { onConflict: 'user_id' });
+        setMessage('Profile picture updated!');
+    }
+    
+    setUploading(false)
+  }
+
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
@@ -112,12 +152,30 @@ export default function EditPublicProfilePage() {
           This information will be visible to everyone on your public artist page.
         </p>
         
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <Image 
+                src={profile.profile_photo_url || 'https://via.placeholder.com/150'}
+                alt="Profile picture preview"
+                width={150}
+                height={150}
+                style={{ borderRadius: '50%', objectFit: 'cover', marginBottom: '1rem' }}
+            />
+            <div>
+                <label htmlFor="avatarUpload" style={{...(styles.button as React.CSSProperties), cursor: 'pointer'}}>
+                    {uploading ? 'Uploading...' : 'Upload New Photo'}
+                </label>
+                <input 
+                    type="file" 
+                    id="avatarUpload"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    disabled={uploading}
+                    style={{ display: 'none' }}
+                />
+            </div>
+        </div>
+        
         <form onSubmit={handleUpdateProfile}>
-          <div style={styles.inputGroup as React.CSSProperties}>
-            <label htmlFor="profile_photo_url" style={styles.label as React.CSSProperties}>Profile Photo URL</label>
-            <input id="profile_photo_url" type="text" style={styles.input as React.CSSProperties} value={profile.profile_photo_url || ''} onChange={handleChange} />
-          </div>
-
           <div style={styles.inputGroup as React.CSSProperties}>
             <label htmlFor="bio" style={styles.label as React.CSSProperties}>Public Bio</label>
             <textarea id="bio" style={styles.textarea as React.CSSProperties} value={profile.bio || ''} onChange={handleChange} rows={6}></textarea>
@@ -142,8 +200,8 @@ export default function EditPublicProfilePage() {
             <input id="youtube" type="text" style={styles.input as React.CSSProperties} value={profile.social_links?.youtube || ''} onChange={handleSocialLinkChange} />
           </div>
           
-          <button type="submit" style={styles.button as React.CSSProperties} disabled={loading}>
-            {loading ? 'Saving...' : 'Save Public Profile'}
+          <button type="submit" style={styles.button as React.CSSProperties} disabled={loading || uploading}>
+            {loading ? 'Saving...' : 'Save Profile Text'}
           </button>
         </form>
         {message && (
@@ -155,3 +213,4 @@ export default function EditPublicProfilePage() {
     </div>
   )
 }
+
