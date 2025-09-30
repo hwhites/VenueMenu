@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { styles } from '../../styles/forms'
 import { User } from '@supabase/supabase-js'
 import * as React from 'react'
+import Link from 'next/link' // Import Link
 
 // --- Type Definitions for Clarity ---
 interface ArtistProfile {
@@ -99,7 +100,6 @@ export default function AccountPage() {
     getProfile()
   }, [getProfile])
 
-  // --- 2. Corrected Profile Update Logic ---
   const handleUpdateProfile = async (e: FormEvent) => {
     e.preventDefault()
     if (!user || !profile?.role) {
@@ -112,7 +112,6 @@ export default function AccountPage() {
 
     const profileTable = profile.role === 'artist' ? 'artist_profiles' : 'venue_profiles'
     
-    // Helper to safely parse numbers, returning undefined for invalid input
     const safeParseInt = (value: any): number | undefined => {
         const num = parseInt(String(value), 10);
         return isNaN(num) ? undefined : num;
@@ -176,15 +175,24 @@ export default function AccountPage() {
   return (
     <div style={{...styles.container as React.CSSProperties, minHeight: 'calc(100vh - 120px)', backgroundColor: 'transparent', padding: '1rem' }}>
       <div style={{ ...styles.formWrapper as React.CSSProperties, maxWidth: '600px' }}>
-        <h1 style={styles.header as React.CSSProperties}>My Profile & Rates</h1>
+        <h1 style={styles.header as React.CSSProperties}>My Dashboard</h1>
         <p style={styles.subHeader as React.CSSProperties}>
-          Update your {profile.role} profile below.
+          This is your private dashboard. Use it to manage your core details for matching.
         </p>
+
+        {/* Link to the new Public Profile Editor */}
+        {profile.role === 'artist' && (
+          <div style={{ marginBottom: '24px', textAlign: 'center' }}>
+              <Link href="/edit-profile" style={{...styles.button as React.CSSProperties, display: 'inline-block', width: 'auto', backgroundColor: '#1d4ed8', textDecoration: 'none' }}>
+                  Edit My Public Profile
+              </Link>
+          </div>
+        )}
 
         <form onSubmit={handleUpdateProfile}>
           {profile.role === 'artist' && (
             <>
-              <h2 style={{...styles.header as React.CSSProperties, fontSize: '20px', textAlign: 'left', marginTop: '20px'}}>Base Details</h2>
+              <h2 style={{...styles.header as React.CSSProperties, fontSize: '20px', textAlign: 'left', marginTop: '20px'}}>Matching Details</h2>
               <div style={styles.inputGroup as React.CSSProperties}>
                 <label htmlFor="stage_name" style={styles.label as React.CSSProperties}>Stage Name</label>
                 <input id="stage_name" type="text" style={styles.input as React.CSSProperties} value={profile.stage_name || ''} onChange={handleChange} />
@@ -203,14 +211,10 @@ export default function AccountPage() {
                 <label htmlFor="genres" style={styles.label as React.CSSProperties}>Genres (comma-separated)</label>
                 <input id="genres" type="text" style={styles.input as React.CSSProperties} value={genreText} onChange={e => setGenreText(e.target.value)} />
               </div>
-              
-              <h2 style={{...styles.header as React.CSSProperties, fontSize: '20px', textAlign: 'left', marginTop: '20px'}}>Pricing</h2>
               <div style={styles.inputGroup as React.CSSProperties}>
                 <label htmlFor="price_min" style={styles.label as React.CSSProperties}>Absolute Minimum Pay ($)</label>
                 <input id="price_min" type="number" style={styles.input as React.CSSProperties} value={profile.price_min || ''} onChange={handleChange} required />
               </div>
-              
-              <h2 style={{...styles.header as React.CSSProperties, fontSize: '20px', textAlign: 'left', marginTop: '20px'}}>Global Settings</h2>
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div style={{ ...(styles.inputGroup as React.CSSProperties), flex: 1 }}>
                   <label htmlFor="service_radius_km" style={styles.label as React.CSSProperties}>Service Radius (km)</label>
@@ -228,7 +232,7 @@ export default function AccountPage() {
                 </div>
               </div>
               <div style={styles.inputGroup as React.CSSProperties}>
-                <label htmlFor="bio" style={styles.label as React.CSSProperties}>Bio / Description</label>
+                <label htmlFor="bio" style={styles.label as React.CSSProperties}>Short Bio for Matching</label>
                 <textarea id="bio" style={styles.textarea as React.CSSProperties} value={profile.bio || ''} onChange={handleChange} />
               </div>
             </>
@@ -290,7 +294,7 @@ export default function AccountPage() {
           )}
 
           <button type="submit" style={styles.button as React.CSSProperties} disabled={loading}>
-            {loading ? 'Saving...' : 'Update Profile'}
+            {loading ? 'Saving...' : 'Update Matching Details'}
           </button>
         </form>
 

@@ -16,7 +16,6 @@ interface ArtistResult {
   home_state: string
   genres: string[]
   price_min: number
-  // 'price_max' is removed as it no longer exists
 }
 
 interface FilterState {
@@ -157,13 +156,17 @@ export default function DiscoverPage() {
                     </span>
                   ))}
                 </div>
-                {/* Corrected Price Display */}
-                <p style={{ margin: '0', color: '#9ca3af', fontSize: '0.8rem' }}>
+                <p style={{ margin: '0 0 1rem 0', color: '#9ca3af', fontSize: '0.8rem' }}>
                   Min Price: ${artist.price_min || 'Not Set'}
                 </p>
-                <Link href={`/messages/${artist.user_id}`} style={{...(styles.button as any), marginTop: '1rem', textDecoration: 'none', textAlign: 'center', padding: '0.5rem' }}>
-                  Contact
-                </Link>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                    <Link href={`/artist/${artist.user_id}`} style={{...(styles.button as any), flex: 1, textDecoration: 'none', textAlign: 'center', padding: '0.5rem', backgroundColor: '#4b5563' }}>
+                      Profile
+                    </Link>
+                    <Link href={`/messages/${artist.user_id}`} style={{...(styles.button as any), flex: 1, textDecoration: 'none', textAlign: 'center', padding: '0.5rem' }}>
+                      Contact
+                    </Link>
+                </div>
               </div>
             ))}
           </div>
