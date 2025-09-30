@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { styles } from '../../styles/forms'
@@ -24,7 +24,8 @@ export default function InboxPage() {
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const fetchUserAndConversations = async () => {
+  // FIX: Wrap fetch function in useCallback to create a stable reference
+  const fetchUserAndConversations = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
       router.push('/login')
@@ -40,18 +41,17 @@ export default function InboxPage() {
       setConversations(data || [])
     }
     setLoading(false)
-  }
+  }, [router]); // router is a stable dependency
 
+  // FIX: Add the stable fetchUserAndConversations function to the dependency array
   useEffect(() => {
     fetchUserAndConversations()
-  }, [router])
+  }, [fetchUserAndConversations])
 
-  // Function to handle deleting a conversation
   const handleDeleteConversation = async (conversationId: number) => {
     if (!user) return;
     
-    // This uses the browser's native confirm dialog. A custom modal would be better for production.
-    if (confirm('Are you sure you want to delete this entire conversation? This cannot be undone.')) {
+    if (window.confirm('Are you sure you want to delete this entire conversation? This cannot be undone.')) {
         const { error: deleteError } = await supabase.rpc('delete_conversation', {
             p_conversation_id: conversationId,
             p_user_id: user.id
@@ -60,7 +60,6 @@ export default function InboxPage() {
         if (deleteError) {
             setError(deleteError.message);
         } else {
-            // Remove the conversation from the local state to update the UI instantly
             setConversations(conversations.filter(c => c.conversation_id !== conversationId));
         }
     }
@@ -100,7 +99,6 @@ export default function InboxPage() {
                                     {convo.last_message_body || 'No messages yet.'}
                                 </p>
                             </Link>
-                            {/* Delete button for each conversation */}
                             <button 
                                 onClick={() => handleDeleteConversation(convo.conversation_id)}
                                 style={{

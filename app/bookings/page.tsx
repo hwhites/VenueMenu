@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, FormEvent, useCallback } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { useRouter } from 'next/navigation'
 import { styles } from '../../styles/forms'
@@ -118,7 +118,8 @@ export default function BookingsPage() {
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null);
   const router = useRouter()
 
-  const fetchUserAndBookings = async () => {
+  // FIX: Wrap fetch function in useCallback to create a stable reference
+  const fetchUserAndBookings = useCallback(async () => {
     setLoading(true);
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -135,11 +136,12 @@ export default function BookingsPage() {
       setBookings(data as Booking[])
     }
     setLoading(false)
-  }
+  }, [router]);
 
+  // FIX: Add the stable fetchUserAndBookings function to the dependency array
   useEffect(() => {
     fetchUserAndBookings()
-  }, [router])
+  }, [fetchUserAndBookings])
 
   const handleConfirmCancel = async () => {
     if (!user || !cancellingBooking) return;
@@ -159,13 +161,15 @@ export default function BookingsPage() {
     setLoading(false);
   }
   
-  // --- Simplified Filtering Logic ---
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const upcomingBookings = bookings
-    .filter(b => b.booking_status === 'confirmed')
+    .filter(b => b.booking_status === 'confirmed' && new Date(b.booking_date) >= today)
     .sort((a, b) => new Date(a.booking_date).getTime() - new Date(b.booking_date).getTime());
 
-  const pastBookings = bookings.filter(b => b.booking_status !== 'confirmed');
-
+  const pastBookings = bookings
+    .filter(b => b.booking_status !== 'confirmed' || new Date(b.booking_date) < today);
 
   if (loading && bookings.length === 0) {
     return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading Bookings...</p></div>

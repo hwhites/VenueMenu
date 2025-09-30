@@ -8,7 +8,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { User } from '@supabase/supabase-js'
-import { CalendarModal } from '../../../components/CalendarModal' // Import the new component
+import { CalendarModal } from '@/components/CalendarModal'
 
 // --- Type Definitions ---
 interface ThemeSettings {
@@ -132,6 +132,7 @@ export default function ArtistProfilePage() {
     <>
       <div style={pageStyle}>
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+              {/* ... (rest of the JSX is the same) ... */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginBottom: '2rem', ...cardStyle, padding: '2rem' }}>
                   <Image src={profile.profile_photo_url || 'https://via.placeholder.com/150'} alt={`${profile.stage_name} profile photo`} width={150} height={150} style={{ borderRadius: '50%', objectFit: 'cover' }} />
                   <div>
@@ -194,7 +195,8 @@ export default function ArtistProfilePage() {
                                   <span style={{ fontWeight: 'bold' }}>{r.venue_name}</span>
                                   <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{r.rating}/5 ★</span>
                               </div>
-                              {r.comment && <p style={{ margin: 0, opacity: 0.9 }}>"{r.comment}"</p>}
+                              {/* FIX: Use a template literal to correctly wrap the comment in quotes */}
+                              {r.comment && <p style={{ margin: 0, opacity: 0.9 }}>{`"${r.comment}"`}</p>}
                           </li>
                       ))}
                   </ul>
