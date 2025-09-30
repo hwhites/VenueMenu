@@ -8,20 +8,20 @@ import { User } from '@supabase/supabase-js'
 import * as React from 'react'
 import Image from 'next/image'
 
-// Type definition for the public profile data
+// --- Type Definitions ---
+interface ThemeSettings {
+  backgroundColor?: string
+  textColor?: string
+}
+
 interface PublicProfile {
   user_id: string
   profile_photo_url?: string
   bio?: string
-  social_links?: {
-    spotify?: string
-    instagram?: string
-    youtube?: string
-    facebook?: string
-    website?: string
-  }
+  social_links?: { [key: string]: string }
   gallery_urls?: string[]
   location_tags?: string[]
+  theme_settings?: ThemeSettings
 }
 
 export default function EditPublicProfilePage() {
@@ -86,9 +86,7 @@ export default function EditPublicProfilePage() {
   }
   
   const handleAvatarUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0 || !user) {
-      return
-    }
+    if (!event.target.files || event.target.files.length === 0 || !user) return
 
     const file = event.target.files[0]
     const fileExt = file.name.split('.').pop()
@@ -123,7 +121,6 @@ export default function EditPublicProfilePage() {
     setUploading(false)
   }
 
-
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setProfile(p => ({ ...p, [id]: value }))
@@ -138,6 +135,18 @@ export default function EditPublicProfilePage() {
               [id]: value
           }
       }));
+  }
+  
+  // ADDITION: Handler for theme color changes
+  const handleThemeChange = (e: ChangeEvent<HTMLInputElement>) => {
+      const { id, value } = e.target;
+      setProfile(p => ({
+          ...p,
+          theme_settings: {
+              ...(p.theme_settings || {}),
+              [id]: value
+          }
+      }))
   }
 
   if (loading) {
@@ -199,9 +208,35 @@ export default function EditPublicProfilePage() {
             <label htmlFor="youtube" style={styles.label as React.CSSProperties}>YouTube URL</label>
             <input id="youtube" type="text" style={styles.input as React.CSSProperties} value={profile.social_links?.youtube || ''} onChange={handleSocialLinkChange} />
           </div>
+
+          {/* ADDITION: Theme Settings Section */}
+          <h2 style={{...styles.header as React.CSSProperties, fontSize: '20px', textAlign: 'left', marginTop: '20px'}}>Theme Customization</h2>
+          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', marginBottom: '1rem' }}>
+            <div style={styles.inputGroup as React.CSSProperties}>
+              <label htmlFor="backgroundColor" style={styles.label as React.CSSProperties}>Page Background</label>
+              <input 
+                id="backgroundColor" 
+                type="color" 
+                value={profile.theme_settings?.backgroundColor || '#111827'} 
+                onChange={handleThemeChange}
+                style={{ width: '100px', height: '40px', cursor: 'pointer' }}
+              />
+            </div>
+            <div style={styles.inputGroup as React.CSSProperties}>
+              <label htmlFor="textColor" style={styles.label as React.CSSProperties}>Text Color</label>
+              <input 
+                id="textColor" 
+                type="color" 
+                value={profile.theme_settings?.textColor || '#f9fafb'} 
+                onChange={handleThemeChange}
+                style={{ width: '100px', height: '40px', cursor: 'pointer' }}
+              />
+            </div>
+          </div>
+
           
           <button type="submit" style={styles.button as React.CSSProperties} disabled={loading || uploading}>
-            {loading ? 'Saving...' : 'Save Profile Text'}
+            {loading ? 'Saving...' : 'Save Public Profile'}
           </button>
         </form>
         {message && (

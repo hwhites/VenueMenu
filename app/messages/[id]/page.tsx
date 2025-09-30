@@ -1,191 +1,345 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabaseClient'
-import { useParams } from 'next/navigation'
-import { styles } from '../../../styles/forms'
-import * as React from 'react'
-import Image from 'next/image'
+import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
+import { supabase } from '../../../lib/supabaseClient';
+import { useRouter, useParams } from 'next/navigation';
+import { styles } from '../../../styles/forms';
+import { User } from '@supabase/supabase-js';
+import * as React from 'react'; 
 
 // --- Type Definitions ---
-interface PublicProfileData {
-  stage_name: string
-  home_city: string
-  home_state: string
-  genres: string[]
-  bio?: string
-  public_bio?: string
-  profile_photo_url?: string
-  social_links?: { [key: string]: string }
+
+interface Message {
+  id: number;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  system_flags?: { [key: string]: any }; 
 }
 
-interface Booking {
-  id: number
-  date: string
-  venue_name: string
+interface Offer {
+  id: number;
+  conversation_id: string;
+  from_user_id: string;
+  date: string;
+  pay_amount: number;
+  set_count: number;
+  set_length_min: number;
+  other_terms: string;
+  status: 'pending' | 'accepted' | 'declined' | 'countered';
+  created_at: string;
 }
 
-export default function ArtistProfilePage() {
-  const [profile, setProfile] = useState<PublicProfileData | null>(null)
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const params = useParams()
-  const artistId = params.id as string
+interface OfferDetails {
+  date: string;
+  pay_amount: string;
+  set_count: string;
+  set_length_min: string;
+  other_terms: string;
+}
 
-  // Helper function to ensure links are absolute
-  const ensureAbsoluteUrl = (url: string): string => {
-    if (!url) return '#';
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-    return `https://${url}`;
+type ChatItem = Message | Offer;
+
+interface ConversationRPCResult {
+  conversation_id: string;
+}
+
+// --- Offer Card Component ---
+
+const OfferCard = ({ offer, user, onAccept, onDecline, onCounter }: {
+    offer: Offer, 
+    user: User | null,
+    onAccept: (offer: Offer) => Promise<void>, 
+    onDecline: (offer: Offer) => Promise<void>,
+    onCounter: (offer: Offer) => void
+}) => {
+  const isRecipient = user?.id !== offer.from_user_id;
+  const isPending = offer.status === 'pending';
+
+  const statusStyles: Record<Offer['status'], React.CSSProperties> = {
+    pending: { backgroundColor: '#4b5563', color: '#f9fafb' },
+    accepted: { backgroundColor: '#16a34a', color: '#f9fafb' },
+    declined: { backgroundColor: '#dc2626', color: '#f9fafb' },
+    countered: { backgroundColor: '#f59e0b', color: '#f9fafb' }, 
   };
 
+  return (
+    <div
+      key={`offer-${offer.id}`} 
+      style={{
+        alignSelf: 'center',
+        width: '80%',
+        backgroundColor: '#374151',
+        padding: '1rem',
+        borderRadius: '12px',
+        margin: '1rem 0',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #4b5563', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+        <h4 style={{ margin: 0, color: '#f9fafb' }}>Official Offer</h4>
+        <span style={{ ...statusStyles[offer.status], padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.8rem', textTransform: 'capitalize' } as React.CSSProperties}>
+          {offer.status}
+        </span>
+      </div>
+      <p style={{ margin: '0 0 0.5rem 0' }}><strong>Date:</strong> {new Date(offer.date).toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <p style={{ margin: '0 0 0.5rem 0' }}><strong>Payment:</strong> ${offer.pay_amount}</p>
+      <p style={{ margin: '0 0 0.5rem 0' }}><strong>Sets:</strong> {offer.set_count} x {offer.set_length_min} min</p>
+      {offer.other_terms && (<p style={{ margin: 0 }}><strong>Terms:</strong> {offer.other_terms}</p>)}
+
+      {/* Show action buttons if the current user is the recipient of a pending offer */}
+      {isRecipient && isPending && (
+        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #4b5563' }}>
+          <button onClick={() => onAccept(offer)} style={{ ...(styles.button as any), flex: 1, backgroundColor: '#16a34a' }}>Accept</button>
+          <button onClick={() => onCounter(offer)} style={{ ...(styles.button as any), flex: 1, backgroundColor: '#f59e0b' }}>Counter</button>
+          <button onClick={() => onDecline(offer)} style={{ ...(styles.button as any), flex: 1, backgroundColor: '#dc2626' }}>Decline</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Main Component ---
+
+export default function ConversationPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+  const [offerDetails, setOfferDetails] = useState<OfferDetails>({ date: '', pay_amount: '', set_count: '', set_length_min: '', other_terms: '' });
+  const [counteringOffer, setCounteringOffer] = useState<Offer | null>(null); // To track which offer is being countered
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null); 
+  const router = useRouter();
+  const params = useParams() as { id: string }; 
+  const otherUserId = params.id;
+
   useEffect(() => {
-    if (!artistId) return
+    const setupConversation = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push('/login'); return; }
+      const currentUser = session.user;
+      setUser(currentUser); 
 
-    const fetchArtistData = async () => {
-      const profilePromise = supabase
-        .from('artist_profiles')
-        .select(`
-          stage_name,
-          home_city,
-          home_state,
-          genres,
-          bio,
-          artist_public_profiles (
-            bio,
-            profile_photo_url,
-            social_links
-          )
-        `)
-        .eq('user_id', artistId)
-        .single()
-
-      const bookingsPromise = supabase
-        .from('bookings')
-        .select(`
-          id,
-          date,
-          venue_profiles ( venue_name )
-        `)
-        .eq('artist_user_id', artistId)
-        .eq('status', 'completed')
-        .order('date', { ascending: false })
-
-      const [{ data: profileData, error: profileError }, { data: bookingsData, error: bookingsError }] = await Promise.all([profilePromise, bookingsPromise])
-
-      if (profileError || !profileData) {
-        setError('Artist not found.')
-        console.error(profileError)
-        setLoading(false)
-        return
-      }
-
-      if (bookingsError) {
-        console.error('Error fetching bookings:', bookingsError)
-      }
-
-      const publicProfileInfo = Array.isArray(profileData.artist_public_profiles) ? profileData.artist_public_profiles[0] : profileData.artist_public_profiles;
-
-      const combinedProfile: PublicProfileData = {
-        stage_name: profileData.stage_name,
-        home_city: profileData.home_city,
-        home_state: profileData.home_state,
-        genres: profileData.genres || [],
-        bio: profileData.bio,
-        public_bio: publicProfileInfo?.bio,
-        profile_photo_url: publicProfileInfo?.profile_photo_url,
-        social_links: publicProfileInfo?.social_links,
-      }
-      setProfile(combinedProfile)
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+      if (!profile) { setError('Your profile could not be found.'); setLoading(false); return; }
+      setUserRole(profile.role);
       
-      const formattedBookings: Booking[] = (bookingsData || []).map(b => {
-        const venueProfile = Array.isArray(b.venue_profiles) ? b.venue_profiles[0] : b.venue_profiles;
-        return {
-          id: b.id,
-          date: b.date,
-          venue_name: (venueProfile as { venue_name: string })?.venue_name || 'Unknown Venue',
-        }
-      });
-      setBookings(formattedBookings)
+      const artistId = profile.role === 'artist' ? currentUser.id : otherUserId;
+      const venueId = profile.role === 'venue' ? currentUser.id : otherUserId;
 
-      setLoading(false)
+      const { data: convoData, error: rpcError } = await supabase.rpc('get_or_create_conversation', { p_artist_user_id: artistId, p_venue_user_id: venueId }).single();
+      if (rpcError || !convoData) { setError(rpcError?.message || 'Failed to establish conversation thread.'); setLoading(false); return; }
+      
+      const currentConvoId: string = (convoData as ConversationRPCResult).conversation_id; 
+      setConversationId(currentConvoId);
+
+      const { data: messagesData } = await supabase.from('messages').select('*').eq('conversation_id', currentConvoId).order('created_at', { ascending: true });
+      const { data: offersData } = await supabase.from('offers').select('*').eq('conversation_id', currentConvoId).order('created_at', { ascending: true });
+
+      setMessages(messagesData as Message[] || []);
+      setOffers(offersData as Offer[] || []);
+      setLoading(false);
+    };
+
+    if (otherUserId) { setupConversation(); }
+  }, [otherUserId, router]);
+
+  useEffect(() => {
+    if (messagesEndRef.current) { messagesEndRef.current.scrollIntoView({ behavior: "smooth" }); }
+  }, [messages, offers]);
+
+  const handleSendMessage = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !conversationId || !user) return; 
+
+    const { data, error } = await supabase.from('messages').insert({ conversation_id: conversationId, sender_id: user.id, body: newMessage } as Partial<Message>).select('*').single();
+    if (error) setError(error.message);
+    else { setMessages(prev => [...prev, data as Message]); setNewMessage(''); }
+  };
+  
+  const handleSendOffer = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!conversationId || !user) return; 
+
+    // If this is a counter-offer, first update the status of the old offer
+    if (counteringOffer) {
+        const { error: updateError } = await supabase.from('offers').update({ status: 'countered' }).eq('id', counteringOffer.id);
+        if (updateError) { setError(updateError.message); return; }
+        setOffers(offers.map(o => o.id === counteringOffer.id ? { ...o, status: 'countered' } : o));
     }
 
-    fetchArtistData()
-  }, [artistId])
+    const { data: insertedOffer, error } = await supabase.from('offers').insert({
+      conversation_id: conversationId,
+      from_user_id: user.id,
+      ...offerDetails,
+      pay_amount: parseInt(offerDetails.pay_amount, 10),
+      set_count: parseInt(offerDetails.set_count, 10),
+      set_length_min: parseInt(offerDetails.set_length_min, 10),
+    } as Partial<Offer>).select('*').single();
 
-  if (loading) {
-    return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading Artist Profile...</p></div>
-  }
-  if (error) {
-    return <div><p style={{ textAlign: 'center', color: '#f87171', marginTop: '2rem' }}>{error}</p></div>
-  }
-  if (!profile) {
-    return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Could not load profile.</p></div>
-  }
+    if (error) {
+      setError(error.message);
+    } else {
+      setIsOfferModalOpen(false);
+      setCounteringOffer(null); // Reset counter offer state
+      
+      const { data: insertedMessage } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: `SYSTEM: ${counteringOffer ? 'Counter-offer' : 'New Offer'} for ${offerDetails.date} sent.`,
+      } as Partial<Message>).select('*').single();
+      
+      setMessages(prev => [...prev, insertedMessage as Message]);
+      setOffers(prev => [...prev, insertedOffer as Offer]);
+    }
+  };
+
+  const handleAcceptOffer = async (offer: Offer) => {
+    if (!conversationId || !user) return;
+    
+    const { error: updateError } = await supabase.from('offers').update({ status: 'accepted' }).eq('id', offer.id);
+    if (updateError) { setError(updateError.message); return; }
+    
+    const { data: convo } = await supabase.from('conversations').select('artist_user_id, venue_user_id').eq('id', conversationId).single();
+    if (!convo) { setError("Error: Could not retrieve conversation for booking."); return; }
+
+    const { error: bookingError } = await supabase.from('bookings').insert({
+      offer_id: offer.id,
+      artist_user_id: convo.artist_user_id,
+      venue_user_id: convo.venue_user_id,
+      date: offer.date,
+      agreed_pay_amount: offer.pay_amount,
+      status: 'confirmed', 
+    });
+    if (bookingError) { setError(`Booking Error: ${bookingError.message}`); return; }
+
+    const { data: newMessageData } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: `SYSTEM: Offer for ${offer.date} accepted. Booking confirmed.`,
+      } as Partial<Message>).select('*').single();
+
+    setOffers(offers.map((o) => (o.id === offer.id ? { ...o, status: 'accepted' } : o)));
+    setMessages(prev => [...prev, newMessageData as Message]);
+  };
+
+  const handleDeclineOffer = async (offer: Offer) => {
+    if (!conversationId || !user) return;
+    
+    const { error } = await supabase.from('offers').update({ status: 'declined' }).eq('id', offer.id);
+    if (error) { setError(error.message); return; }
+
+    const { data: newMessageData } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body: `SYSTEM: Offer for ${offer.date} declined.`,
+      } as Partial<Message>).select('*').single();
+
+    setOffers(offers.map((o) => (o.id === offer.id ? { ...o, status: 'declined' } : o)));
+    setMessages(prev => [...prev, newMessageData as Message]);
+  };
+
+  // Function to open the offer modal, pre-filled for a counter-offer
+  const handleOpenCounterModal = (offer: Offer) => {
+    setCounteringOffer(offer);
+    setOfferDetails({
+        date: offer.date,
+        pay_amount: String(offer.pay_amount),
+        set_count: String(offer.set_count),
+        set_length_min: String(offer.set_length_min),
+        other_terms: offer.other_terms,
+    });
+    setIsOfferModalOpen(true);
+  };
+  
+  // Function to open a fresh offer modal
+  const handleOpenNewOfferModal = () => {
+      setCounteringOffer(null);
+      setOfferDetails({ date: '', pay_amount: '', set_count: '', set_length_min: '', other_terms: '' });
+      setIsOfferModalOpen(true);
+  };
+
+  if (loading) return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading Conversation...</p></div>;
+  if (error) return <div><p style={{ textAlign: 'center', marginTop: '2rem', color: '#f87171' }}>Error: {error}</p></div>;
+
+  const chatFeed = ([...messages, ...offers] as ChatItem[]).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginBottom: '2rem' }}>
-        <Image
-          src={profile.profile_photo_url || 'https://via.placeholder.com/150'}
-          alt={`${profile.stage_name} profile photo`}
-          width={150}
-          height={150}
-          style={{ borderRadius: '50%', objectFit: 'cover' }}
-        />
-        <div>
-          <h1 style={{ ...styles.header as React.CSSProperties, margin: 0, fontSize: '2.5rem' }}>{profile.stage_name}</h1>
-          <p style={{ ...styles.subHeader as React.CSSProperties, margin: '0.5rem 0', fontSize: '1.2rem' }}>{profile.home_city}, {profile.home_state}</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            {profile.genres.map(g => (
-              <span key={g} style={{ backgroundColor: '#374151', padding: '0.25rem 0.75rem', borderRadius: '12px', fontSize: '0.9rem' }}>{g}</span>
-            ))}
+    <>
+      <div style={{...(styles.container as React.CSSProperties), minHeight: 'calc(100vh - 120px)', backgroundColor: 'transparent', padding: '1rem', alignItems: 'flex-start'}}>
+        <div style={{...(styles.formWrapper as React.CSSProperties), maxWidth: '800px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)'}}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h1 style={styles.header as any}>Conversation</h1>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column-reverse', gap: '1rem', marginBottom: '1rem' }}>
+            <div ref={messagesEndRef} />
+            {[...chatFeed].reverse().map((item) => {
+              if ('body' in item) { 
+                const messageItem = item as Message;
+                const isMyMessage = messageItem.sender_id === user?.id; 
+                return (
+                  <div key={`msg-${messageItem.id}`} style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start', backgroundColor: isMyMessage ? '#1d4ed8' : '#374151', padding: '0.75rem 1rem', borderRadius: '12px', maxWidth: '70%' }}>
+                    <p style={{ margin: 0, color: '#f9fafb' }}>{messageItem.body}</p>
+                  </div>
+                );
+              } else {
+                const offerItem = item as Offer;
+                return (
+                  <OfferCard
+                    key={`offer-${offerItem.id}`}
+                    offer={offerItem}
+                    user={user} 
+                    onAccept={handleAcceptOffer}
+                    onDecline={handleDeclineOffer}
+                    onCounter={handleOpenCounterModal}
+                  />
+                );
+              }
+            })}
+          </div>
+
+          <div>
+            <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+              <input type="text" value={newMessage} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)} style={{ ...(styles.input as any), flex: 1 }} placeholder="Type your message..." />
+              <button type="submit" style={{ ...(styles.button as any), width: 'auto' }}>Send</button>
+            </form>
+            {userRole === 'venue' && (
+              <button type="button" onClick={handleOpenNewOfferModal} style={{ ...(styles.button as any), width: '100%', marginTop: '10px' }}>
+                Make New Offer
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
-        <div>
-          <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.5rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>About</h2>
-          <p style={{ color: '#d1d5db', lineHeight: '1.6' }}>{profile.public_bio || profile.bio || 'No bio available.'}</p>
+      {isOfferModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ ...(styles.formWrapper as any), maxWidth: '500px' }}>
+            <h1 style={styles.header as any}>{counteringOffer ? 'Propose Counter-Offer' : 'Create an Offer'}</h1>
+            <form onSubmit={handleSendOffer}>
+              <div style={styles.inputGroup as any}><label style={styles.label as any}>Date</label><input type="date" style={styles.input as any} required value={offerDetails.date} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, date: e.target.value })} /></div>
+              <div style={styles.inputGroup as any}><label style={styles.label as any}>Payment ($)</label><input type="number" style={styles.input as any} required value={offerDetails.pay_amount} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, pay_amount: e.target.value })} /></div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={styles.inputGroup as any}><label style={styles.label as any}>Set Count</label><input type="number" style={styles.input as any} required value={offerDetails.set_count} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, set_count: e.target.value })} /></div>
+                <div style={styles.inputGroup as any}><label style={styles.label as any}>Set Length (min)</label><input type="number" style={styles.input as any} required value={offerDetails.set_length_min} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, set_length_min: e.target.value })} /></div>
+              </div>
+              <div style={styles.inputGroup as any}><label style={styles.label as any}>Other Terms</label><textarea style={styles.textarea as any} value={offerDetails.other_terms} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setOfferDetails({ ...offerDetails, other_terms: e.target.value })}></textarea></div>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button type="submit" style={{ ...(styles.button as any), flex: 1 }}>Send Offer</button>
+                <button type="button" onClick={() => setIsOfferModalOpen(false)} style={{ ...(styles.button as any), flex: 1, backgroundColor: '#4b5563' }}>Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
-        <div>
-          <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.5rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>Links</h2>
-          {profile.social_links && Object.keys(profile.social_links).length > 0 ? (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {Object.entries(profile.social_links).map(([key, value]) => value && (
-                <li key={key}>
-                  {/* FIX: Links now correctly lead to external websites */}
-                  <a href={ensureAbsoluteUrl(value as string)} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', textTransform: 'capitalize' }}>
-                    {key}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          ) : <p style={{ color: '#9ca3af' }}>No social links provided.</p>}
-        </div>
-      </div>
-
-      <div style={{ marginTop: '3rem' }}>
-        <h2 style={{...styles.header as React.CSSProperties, fontSize: '1.5rem', borderBottom: '1px solid #374151', paddingBottom: '0.5rem' }}>Gig History</h2>
-        {bookings.length > 0 ? (
-          <ul style={{ listStyle: 'none', padding: 0, margin: '1rem 0 0 0' }}>
-            {bookings.map(b => (
-              <li key={b.id} style={{ backgroundColor: '#1f2937', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontWeight: 'bold' }}>{b.venue_name}</span>
-                <span style={{ color: '#9ca3af' }}>{new Date(b.date).toLocaleDateString(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' })}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p style={{ color: '#9ca3af', textAlign: 'center', marginTop: '2rem' }}>No completed gigs to show.</p>
-        )}
-      </div>
-    </div>
-  )
+      )}
+    </>
+  );
 }
 
