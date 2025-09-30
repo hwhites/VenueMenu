@@ -6,9 +6,9 @@ import { supabase } from '../../lib/supabaseClient'
 import { styles } from '../../styles/forms'
 import { User } from '@supabase/supabase-js'
 import * as React from 'react'
-import Link from 'next/link' // Import Link
+import Link from 'next/link'
 
-// --- Type Definitions for Clarity ---
+// --- Type Definitions ---
 interface ArtistProfile {
   user_id: string
   stage_name?: string
@@ -156,7 +156,7 @@ export default function AccountPage() {
       setMessage(`Error: ${error.message}`)
       console.error('Profile Save Error:', error)
     } else {
-      setMessage('Success! Your profile has been updated.')
+      setMessage('Success! Your core details have been updated.')
     }
     setLoading(false)
   }
@@ -168,7 +168,7 @@ export default function AccountPage() {
     setProfile(p => (p ? { ...p, [id]: val } : null))
   }
 
-  if (loading || !profile) {
+  if (loading || !profile || !user) {
     return <div><p style={{ textAlign: 'center', marginTop: '2rem' }}>Loading...</p></div>
   }
 
@@ -180,11 +180,14 @@ export default function AccountPage() {
           This is your private dashboard. Use it to manage your core details for matching.
         </p>
 
-        {/* Link to the new Public Profile Editor */}
+        {/* This is the section that adds the "View Public Profile" button */}
         {profile.role === 'artist' && (
-          <div style={{ marginBottom: '24px', textAlign: 'center' }}>
-              <Link href="/edit-profile" style={{...styles.button as React.CSSProperties, display: 'inline-block', width: 'auto', backgroundColor: '#1d4ed8', textDecoration: 'none' }}>
-                  Edit My Public Profile
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '24px', justifyContent: 'center' }}>
+              <Link href="/edit-profile" style={{...styles.button as React.CSSProperties, flex: 1, display: 'inline-block', backgroundColor: '#1d4ed8', textDecoration: 'none' }}>
+                  Edit Public Profile
+              </Link>
+              <Link href={`/artist/${user.id}`} target="_blank" style={{...styles.button as React.CSSProperties, flex: 1, display: 'inline-block', backgroundColor: '#4b5563', textDecoration: 'none' }}>
+                  View Public Page
               </Link>
           </div>
         )}
