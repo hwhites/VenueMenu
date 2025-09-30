@@ -153,32 +153,18 @@ export default function BookingsPage() {
     if (cancelError) {
         setError(cancelError.message);
     } else {
-        fetchUserAndBookings(); // Refresh list to show updated status
+        fetchUserAndBookings();
     }
-    setCancellingBooking(null); // Close modal
+    setCancellingBooking(null);
     setLoading(false);
   }
-
-  // --- Corrected Filtering Logic ---
-
-  // Helper function to parse 'YYYY-MM-DD' strings as local midnight, avoiding timezone errors.
-  const parseDateAsLocal = (dateString: string) => {
-    const [year, month, day] = dateString.split('-').map(Number);
-    // The month is 0-indexed in JavaScript's Date constructor.
-    return new Date(year, month - 1, day);
-  };
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize today to midnight for a clean comparison.
-
-  // A booking is upcoming if its status is confirmed AND its date is today or in the future.
+  // --- Simplified Filtering Logic ---
   const upcomingBookings = bookings
-    .filter(b => b.booking_status === 'confirmed' && parseDateAsLocal(b.booking_date) >= today)
+    .filter(b => b.booking_status === 'confirmed')
     .sort((a, b) => new Date(a.booking_date).getTime() - new Date(b.booking_date).getTime());
 
-  // A booking is in the past if its status is anything other than confirmed, OR if its date has passed.
-  const pastBookings = bookings
-    .filter(b => b.booking_status !== 'confirmed' || parseDateAsLocal(b.booking_date) < today);
+  const pastBookings = bookings.filter(b => b.booking_status !== 'confirmed');
 
 
   if (loading && bookings.length === 0) {

@@ -6,9 +6,9 @@ import { useRouter, useParams } from 'next/navigation';
 import { styles } from '../../../styles/forms';
 import { User } from '@supabase/supabase-js';
 import * as React from 'react'; 
+import { CalendarModal } from '../../../components/CalendarModal';
 
 // --- Type Definitions ---
-
 interface Message {
   id: number;
   conversation_id: string;
@@ -45,8 +45,8 @@ interface ConversationRPCResult {
   conversation_id: string;
 }
 
-// --- Offer Card Component ---
 
+// --- Offer Card Component ---
 const OfferCard = ({ offer, user, onAccept, onDecline, onCounter }: {
     offer: Offer, 
     user: User | null,
@@ -87,7 +87,6 @@ const OfferCard = ({ offer, user, onAccept, onDecline, onCounter }: {
       <p style={{ margin: '0 0 0.5rem 0' }}><strong>Sets:</strong> {offer.set_count} x {offer.set_length_min} min</p>
       {offer.other_terms && (<p style={{ margin: 0 }}><strong>Terms:</strong> {offer.other_terms}</p>)}
 
-      {/* Show action buttons if the current user is the recipient of a pending offer */}
       {isRecipient && isPending && (
         <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #4b5563' }}>
           <button onClick={() => onAccept(offer)} style={{ ...(styles.button as any), flex: 1, backgroundColor: '#16a34a' }}>Accept</button>
@@ -112,7 +111,10 @@ export default function ConversationPage() {
   const [error, setError] = useState('');
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [offerDetails, setOfferDetails] = useState<OfferDetails>({ date: '', pay_amount: '', set_count: '', set_length_min: '', other_terms: '' });
-  const [counteringOffer, setCounteringOffer] = useState<Offer | null>(null); // To track which offer is being countered
+  const [counteringOffer, setCounteringOffer] = useState<Offer | null>(null);
+  
+  const [artistAvailability, setArtistAvailability] = useState<string[]>([]);
+  const [isCalendarPickerOpen, setIsCalendarPickerOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null); 
   const router = useRouter();
@@ -133,6 +135,13 @@ export default function ConversationPage() {
       const artistId = profile.role === 'artist' ? currentUser.id : otherUserId;
       const venueId = profile.role === 'venue' ? currentUser.id : otherUserId;
 
+      if (profile.role === 'venue') {
+          const { data: availabilityData } = await supabase.rpc('get_artist_availability', { p_artist_id: artistId });
+          if (availabilityData) {
+              setArtistAvailability(availabilityData.map((d: { available_date: string }) => d.available_date.split('T')[0]));
+          }
+      }
+
       const { data: convoData, error: rpcError } = await supabase.rpc('get_or_create_conversation', { p_artist_user_id: artistId, p_venue_user_id: venueId }).single();
       if (rpcError || !convoData) { setError(rpcError?.message || 'Failed to establish conversation thread.'); setLoading(false); return; }
       
@@ -149,7 +158,7 @@ export default function ConversationPage() {
 
     if (otherUserId) { setupConversation(); }
   }, [otherUserId, router]);
-
+  
   useEffect(() => {
     if (messagesEndRef.current) { messagesEndRef.current.scrollIntoView({ behavior: "smooth" }); }
   }, [messages, offers]);
@@ -165,9 +174,11 @@ export default function ConversationPage() {
   
   const handleSendOffer = async (e: FormEvent) => {
     e.preventDefault();
-    if (!conversationId || !user) return; 
+    if (!conversationId || !user || !offerDetails.date) {
+        setError("Please select a date for the offer.");
+        return;
+    }; 
 
-    // If this is a counter-offer, first update the status of the old offer
     if (counteringOffer) {
         const { error: updateError } = await supabase.from('offers').update({ status: 'countered' }).eq('id', counteringOffer.id);
         if (updateError) { setError(updateError.message); return; }
@@ -187,7 +198,7 @@ export default function ConversationPage() {
       setError(error.message);
     } else {
       setIsOfferModalOpen(false);
-      setCounteringOffer(null); // Reset counter offer state
+      setCounteringOffer(null);
       
       const { data: insertedMessage } = await supabase.from('messages').insert({
         conversation_id: conversationId,
@@ -219,14 +230,12 @@ export default function ConversationPage() {
     });
     if (bookingError) { setError(`Booking Error: ${bookingError.message}`); return; }
 
-    const { data: newMessageData } = await supabase.from('messages').insert({
-        conversation_id: conversationId,
-        sender_id: user.id,
-        body: `SYSTEM: Offer for ${offer.date} accepted. Booking confirmed.`,
-      } as Partial<Message>).select('*').single();
-
-    setOffers(offers.map((o) => (o.id === offer.id ? { ...o, status: 'accepted' } : o)));
-    setMessages(prev => [...prev, newMessageData as Message]);
+    // REMOVED: The system message creation has been removed from this function.
+    
+    setOffers(
+      offers.map((o) => (o.id === offer.id ? { ...o, status: 'accepted' } : o))
+    );
+    // REMOVED: No longer adding a system message to the state.
   };
 
   const handleDeclineOffer = async (offer: Offer) => {
@@ -241,11 +250,12 @@ export default function ConversationPage() {
         body: `SYSTEM: Offer for ${offer.date} declined.`,
       } as Partial<Message>).select('*').single();
 
-    setOffers(offers.map((o) => (o.id === offer.id ? { ...o, status: 'declined' } : o)));
+    setOffers(
+      offers.map((o) => (o.id === offer.id ? { ...o, status: 'declined' } : o))
+    );
     setMessages(prev => [...prev, newMessageData as Message]);
   };
 
-  // Function to open the offer modal, pre-filled for a counter-offer
   const handleOpenCounterModal = (offer: Offer) => {
     setCounteringOffer(offer);
     setOfferDetails({
@@ -258,7 +268,6 @@ export default function ConversationPage() {
     setIsOfferModalOpen(true);
   };
   
-  // Function to open a fresh offer modal
   const handleOpenNewOfferModal = () => {
       setCounteringOffer(null);
       setOfferDetails({ date: '', pay_amount: '', set_count: '', set_length_min: '', other_terms: '' });
@@ -274,48 +283,48 @@ export default function ConversationPage() {
     <>
       <div style={{...(styles.container as React.CSSProperties), minHeight: 'calc(100vh - 120px)', backgroundColor: 'transparent', padding: '1rem', alignItems: 'flex-start'}}>
         <div style={{...(styles.formWrapper as React.CSSProperties), maxWidth: '800px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)'}}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h1 style={styles.header as any}>Conversation</h1>
-          </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h1 style={styles.header as any}>Conversation</h1>
+            </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column-reverse', gap: '1rem', marginBottom: '1rem' }}>
-            <div ref={messagesEndRef} />
-            {[...chatFeed].reverse().map((item) => {
-              if ('body' in item) { 
-                const messageItem = item as Message;
-                const isMyMessage = messageItem.sender_id === user?.id; 
-                return (
-                  <div key={`msg-${messageItem.id}`} style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start', backgroundColor: isMyMessage ? '#1d4ed8' : '#374151', padding: '0.75rem 1rem', borderRadius: '12px', maxWidth: '70%' }}>
-                    <p style={{ margin: 0, color: '#f9fafb' }}>{messageItem.body}</p>
-                  </div>
-                );
-              } else {
-                const offerItem = item as Offer;
-                return (
-                  <OfferCard
-                    key={`offer-${offerItem.id}`}
-                    offer={offerItem}
-                    user={user} 
-                    onAccept={handleAcceptOffer}
-                    onDecline={handleDeclineOffer}
-                    onCounter={handleOpenCounterModal}
-                  />
-                );
-              }
-            })}
-          </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column-reverse', gap: '1rem', marginBottom: '1rem' }}>
+                <div ref={messagesEndRef} />
+                {[...chatFeed].reverse().map((item) => {
+                  if ('body' in item) { 
+                      const messageItem = item as Message;
+                      const isMyMessage = messageItem.sender_id === user?.id; 
+                      return (
+                      <div key={`msg-${messageItem.id}`} style={{ alignSelf: isMyMessage ? 'flex-end' : 'flex-start', backgroundColor: isMyMessage ? '#1d4ed8' : '#374151', padding: '0.75rem 1rem', borderRadius: '12px', maxWidth: '70%' }}>
+                          <p style={{ margin: 0, color: '#f9fafb' }}>{messageItem.body}</p>
+                      </div>
+                      );
+                  } else {
+                      const offerItem = item as Offer;
+                      return (
+                      <OfferCard
+                          key={`offer-${offerItem.id}`}
+                          offer={offerItem}
+                          user={user} 
+                          onAccept={handleAcceptOffer}
+                          onDecline={handleDeclineOffer}
+                          onCounter={handleOpenCounterModal}
+                      />
+                      );
+                  }
+                })}
+            </div>
 
-          <div>
-            <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
-              <input type="text" value={newMessage} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)} style={{ ...(styles.input as any), flex: 1 }} placeholder="Type your message..." />
-              <button type="submit" style={{ ...(styles.button as any), width: 'auto' }}>Send</button>
-            </form>
-            {userRole === 'venue' && (
-              <button type="button" onClick={handleOpenNewOfferModal} style={{ ...(styles.button as any), width: '100%', marginTop: '10px' }}>
-                Make New Offer
-              </button>
-            )}
-          </div>
+            <div>
+                <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
+                <input type="text" value={newMessage} onChange={(e: ChangeEvent<HTMLInputElement>) => setNewMessage(e.target.value)} style={{ ...(styles.input as any), flex: 1 }} placeholder="Type your message..." />
+                <button type="submit" style={{ ...(styles.button as any), width: 'auto' }}>Send</button>
+                </form>
+                {userRole === 'venue' && (
+                <button type="button" onClick={handleOpenNewOfferModal} style={{ ...(styles.button as any), width: '100%', marginTop: '10px' }}>
+                    Make New Offer
+                </button>
+                )}
+            </div>
         </div>
       </div>
 
@@ -324,7 +333,14 @@ export default function ConversationPage() {
           <div style={{ ...(styles.formWrapper as any), maxWidth: '500px' }}>
             <h1 style={styles.header as any}>{counteringOffer ? 'Propose Counter-Offer' : 'Create an Offer'}</h1>
             <form onSubmit={handleSendOffer}>
-              <div style={styles.inputGroup as any}><label style={styles.label as any}>Date</label><input type="date" style={styles.input as any} required value={offerDetails.date} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, date: e.target.value })} /></div>
+              <div style={styles.inputGroup as any}>
+                  <label style={styles.label as any}>Date</label>
+                  <input type="text" style={styles.input as any} required value={offerDetails.date} readOnly placeholder="Select a date from the calendar" />
+                  <button type="button" onClick={() => setIsCalendarPickerOpen(true)} style={{...styles.button as any, width: '100%', marginTop: '0.5rem', backgroundColor: '#4b5563'}}>
+                      Select from Available Dates
+                  </button>
+              </div>
+
               <div style={styles.inputGroup as any}><label style={styles.label as any}>Payment ($)</label><input type="number" style={styles.input as any} required value={offerDetails.pay_amount} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, pay_amount: e.target.value })} /></div>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <div style={styles.inputGroup as any}><label style={styles.label as any}>Set Count</label><input type="number" style={styles.input as any} required value={offerDetails.set_count} onChange={(e: ChangeEvent<HTMLInputElement>) => setOfferDetails({ ...offerDetails, set_count: e.target.value })} /></div>
@@ -338,6 +354,18 @@ export default function ConversationPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {isCalendarPickerOpen && (
+        <CalendarModal 
+            availableDates={artistAvailability}
+            onClose={() => setIsCalendarPickerOpen(false)}
+            selectable={true}
+            onDateSelect={(date) => {
+                setOfferDetails(prev => ({ ...prev, date: date }));
+                setIsCalendarPickerOpen(false);
+            }}
+        />
       )}
     </>
   );
