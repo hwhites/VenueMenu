@@ -162,7 +162,7 @@ export default function BookingDetailPage() {
             <ConfirmationModal 
                 onConfirm={() => handleConfirmCancellation(userRole === 'venue')}
                 onCancel={() => setIsCancelling(false)}
-                // FIX: Replaced single quotes with &apos; to prevent build error
+                // FIX: Replaced single quotes with the HTML entity &apos;
                 message={userRole === 'venue' ? "This will mark the booking as 'Canceled by Artist'. Are you sure?" : "This action cannot be undone. The other party will be notified."}
             />
         )}
