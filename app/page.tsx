@@ -38,7 +38,6 @@ export default function HomePage() {
   const fetchGigs = useCallback(async (currentRole: string | null) => {
     const roleToFetch = currentRole === 'artist' ? 'venue' : (currentRole === 'venue' ? 'artist' : null);
     
-    // Only fetch if a role is determined (i.e., user is logged in)
     if (!roleToFetch) {
         setGigs([]);
         return;
@@ -59,14 +58,14 @@ export default function HomePage() {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
+      let role: 'artist' | 'venue' | null = null;
       if (currentUser) {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
-        const role = profile?.role || null;
+        role = profile?.role || null;
         setUserRole(role);
-        await fetchGigs(role);
-      } else {
-        setGigs([]); // Ensure gigs are empty if logged out
       }
+      
+      await fetchGigs(role);
       setLoading(false);
     };
     fetchUserAndGigs();
@@ -101,9 +100,6 @@ export default function HomePage() {
     return <div style={{...styles.container as any}}><p style={{color: '#fff'}}>Loading...</p></div>
   }
 
-  // --- RENDER LOGIC ---
-
-  // If user is not logged in, show a welcome/login screen
   if (!user) {
     return (
         <div style={{...styles.container as any, minHeight: 'calc(100vh - 80px)', alignItems: 'center', padding: '1rem' }}>
@@ -124,7 +120,6 @@ export default function HomePage() {
     );
   }
 
-  // If user is logged in, show the Instant Gig Board
   return (
     <div style={{...styles.container as any, minHeight: 'calc(100vh - 80px)', alignItems: 'flex-start', padding: '1rem' }}>
       <div style={{...styles.formWrapper as any, maxWidth: '900px', width: '100%'}}>
@@ -155,7 +150,8 @@ export default function HomePage() {
                 <div style={{ marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                     {(gig.genres || []).map(g => (<span key={g} style={{ backgroundColor: '#4b5563', padding: '0.25rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem' }}>{g}</span>))}
                 </div>
-                {gig.notes && <p style={{ margin: '0 0 1rem 0', color: '#9ca3af', fontStyle: 'italic' }}>"{gig.notes}"</p>}
+                {/* FIX: Use a template literal to correctly wrap the notes in quotes */}
+                {gig.notes && <p style={{ margin: '0 0 1rem 0', color: '#9ca3af', fontStyle: 'italic' }}>{`"${gig.notes}"`}</p>}
 
                 <div style={{marginTop: 'auto'}}>
                     {confirmingGigId === gig.gig_id ? (

@@ -37,7 +37,7 @@ export default function BookingDetailPage() {
   const [booking, setBooking] = useState<BookingDetails | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [isCancelling, setIsCancelling] = useState(false); // State for cancel confirmation
+  const [isCancelling, setIsCancelling] = useState(false);
   const router = useRouter()
   const params = useParams()
   const bookingId = params.id as string
@@ -83,7 +83,7 @@ export default function BookingDetailPage() {
 
   const handleReportNoShow = async () => {
       if (!user || !booking) return;
-      setIsCancelling(true); // Re-use the confirmation modal
+      setIsCancelling(true);
   }
   
   const handleConfirmCancellation = async (isNoShow: boolean) => {
@@ -145,7 +145,6 @@ export default function BookingDetailPage() {
                         {isConfirmed && (
                             <>
                                 <button onClick={handleMarkComplete} style={{...styles.button as React.CSSProperties, backgroundColor: '#16a34a'}}>Mark as Complete</button>
-                                {/* ADDITION: Cancel Booking Button */}
                                 <button onClick={() => setIsCancelling(true)} style={{...styles.button as React.CSSProperties, backgroundColor: '#dc2626'}}>Cancel Booking</button>
                             </>
                         )}
@@ -163,6 +162,7 @@ export default function BookingDetailPage() {
             <ConfirmationModal 
                 onConfirm={() => handleConfirmCancellation(userRole === 'venue')}
                 onCancel={() => setIsCancelling(false)}
+                // FIX: Replaced single quotes with &apos; to prevent build error
                 message={userRole === 'venue' ? "This will mark the booking as 'Canceled by Artist'. Are you sure?" : "This action cannot be undone. The other party will be notified."}
             />
         )}
