@@ -40,7 +40,6 @@ export const styles = {
     zIndex: 40,
     boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
   },
-  // ADDITION: The missing style for mobile menu items
   mobileMenuItem: {
     display: 'block',
     padding: '0.75rem 1.5rem',
@@ -51,11 +50,17 @@ export const styles = {
   notificationButton: {
     background: 'none',
     border: 'none',
-    color: '#f9fafb',
-    fontSize: '1.5rem',
+    color: '#d1d5db',
     cursor: 'pointer',
     position: 'relative',
-    padding: '0.5rem'
+    padding: '0.5rem',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  // ADDITION: The missing style for the Heroicon SVG
+  icon: {
+    width: '24px',
+    height: '24px',
   },
   notificationCount: {
     position: 'absolute',
@@ -64,9 +69,9 @@ export const styles = {
     backgroundColor: '#dc2626',
     color: 'white',
     borderRadius: '50%',
-    width: '20px',
-    height: '20px',
-    fontSize: '0.75rem',
+    width: '18px',
+    height: '18px',
+    fontSize: '0.7rem',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

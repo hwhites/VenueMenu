@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { User, Session } from '@supabase/supabase-js'
 import Link from 'next/link'
 import * as React from 'react'
 import { styles } from '../styles/layout'
+// FIX: Import the BellIcon as a component from the heroicons library
+import { BellIcon } from '@heroicons/react/24/outline'
 
 // --- Type Definitions ---
 interface NavOption {
@@ -38,20 +40,16 @@ export default function Header() {
   const notificationRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
 
-  // --- FIX: Consolidated and robust useEffect hook ---
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
 
-    // A single function to handle all user state changes
     const handleAuthStateChange = async (session: Session | null) => {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
-        // Clear any existing polling interval
         if (intervalId) clearInterval(intervalId);
 
         if (currentUser) {
-            // If user is logged in, fetch their profile and notifications
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
             setRole(profile?.role || null);
 
@@ -61,34 +59,28 @@ export default function Header() {
                 else setNotifications(data || []);
             };
             
-            await fetchNotifications(); // Fetch once immediately
-            intervalId = setInterval(fetchNotifications, 15000); // Set a new interval for polling
+            await fetchNotifications();
+            intervalId = setInterval(fetchNotifications, 15000);
         } else {
-            // If user is logged out, clear all related state
             setRole(null);
             setNotifications([]);
         }
     };
 
-    // Check the session on initial component mount
     supabase.auth.getSession().then(({ data: { session } }) => {
         handleAuthStateChange(session);
     });
 
-    // Set up the listener for subsequent auth events (login, logout)
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
         handleAuthStateChange(session);
     });
 
-    // Cleanup function to unsubscribe and clear interval when the component unmounts
     return () => {
         authListener.subscription.unsubscribe();
         if (intervalId) clearInterval(intervalId);
     };
-  }, []); // Empty dependency array ensures this runs only once on mount
-
+  }, []);
   
-  // Close dropdowns if clicking outside the header
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
@@ -161,7 +153,8 @@ export default function Header() {
             {user && (
                 <div ref={notificationRef} style={{ position: 'relative' }}>
                     <button onClick={handleBellClick} style={styles.notificationButton as React.CSSProperties}>
-                        🔔
+                        {/* FIX: Use the imported BellIcon component here */}
+                        <BellIcon style={styles.icon as React.CSSProperties} />
                         {notifications.length > 0 && (
                             <span style={styles.notificationCount as React.CSSProperties}>{notifications.length}</span>
                         )}
