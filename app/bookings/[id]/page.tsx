@@ -139,7 +139,7 @@ export default function BookingDetailPage() {
                 <div style={{ marginTop: '2rem' }}>
                     <h3 style={{...styles.header as React.CSSProperties, fontSize: '1.2rem'}}>Actions</h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                        <Link href={`/${otherParty.role}/${otherParty.id}`} style={{...styles.button as React.CSSProperties, textDecoration: 'none', textAlign: 'center', backgroundColor: '#4b5563'}}>View {otherParty.role}&apos;'s Profile</Link>
+                        <Link href={`/${otherParty.role}/${otherParty.id}`} style={{...styles.button as React.CSSProperties, textDecoration: 'none', textAlign: 'center', backgroundColor: '#4b5563'}}>View {otherParty.role}&apos;s Profile</Link>
                         <Link href={`/messages/${otherParty.id}`} style={{...styles.button as React.CSSProperties, textDecoration: 'none', textAlign: 'center', backgroundColor: '#4b5563'}}>Contact Regarding Booking</Link>
                         
                         {isConfirmed && (
@@ -163,7 +163,7 @@ export default function BookingDetailPage() {
                 onConfirm={() => handleConfirmCancellation(userRole === 'venue')}
                 onCancel={() => setIsCancelling(false)}
                 // FIX: Replaced single quotes with the HTML entity &apos;
-                message={userRole === 'venue' ? "This will mark the booking as &apos;'Canceled by Artist&apos;'. Are you sure?" : "This action cannot be undone. The other party will be notified."}
+                message={userRole === 'venue' ? "This will mark the booking as &apos;Canceled by Artist&apos;. Are you sure?" : "This action cannot be undone. The other party will be notified."}
             />
         )}
     </>
