@@ -7,14 +7,16 @@ import { styles } from '../styles/forms';
 interface CalendarModalProps {
   availableDates: string[];
   onClose: () => void;
-  onDateSelect?: (date: string) => void; // Optional: for making dates clickable
-  selectable?: boolean; // Optional: flag to enable selection
+  onDateSelect?: (date: string) => void;
+  selectable?: boolean;
 }
 
 export const CalendarModal = ({ availableDates, onClose, onDateSelect, selectable = false }: CalendarModalProps) => {
     const [currentDate, setCurrentDate] = useState(new Date());
 
     const availabilitySet = new Set(availableDates);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -26,30 +28,38 @@ export const CalendarModal = ({ availableDates, onClose, onDateSelect, selectabl
         calendarDays.push(<div key={`empty-${i}`} style={{ visibility: 'hidden' }}></div>);
     }
     for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), day))
-            .toISOString().split('T')[0];
+        const dateObj = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), day));
+        const dateStr = dateObj.toISOString().split('T')[0];
+        const isPast = dateObj < today;
         
         const isAvailable = availabilitySet.has(dateStr);
+
+        // --- UPDATED CLICK LOGIC ---
+        // A date is clickable if the calendar is selectable, the date isn't in the past, AND either:
+        // 1. The date is explicitly marked as available.
+        // 2. No available dates were provided at all (for venues picking any date).
+        const isClickable = selectable && !isPast && (isAvailable || availableDates.length === 0);
 
         let dayStyle: React.CSSProperties = {
             width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: '50%', color: '#f9fafb',
-            backgroundColor: '#4b5563', // Default to grey
-            cursor: 'default'
+            backgroundColor: isAvailable ? '#16a34a' : '#4b5563',
+            cursor: isClickable ? 'pointer' : 'default',
+            opacity: isPast ? 0.5 : 1,
+            transition: 'transform 0.1s ease-in-out',
         };
 
-        if (isAvailable) {
-            dayStyle.backgroundColor = '#16a34a'; // Green for available
-            if (selectable) {
-                dayStyle.cursor = 'pointer';
-            }
+        if(isPast) {
+            dayStyle.backgroundColor = '#374151'; // Darker grey for past dates
         }
 
         calendarDays.push(
             <div 
                 key={day} 
                 style={dayStyle}
-                onClick={() => selectable && isAvailable && onDateSelect && onDateSelect(dateStr)}
+                onClick={() => isClickable && onDateSelect && onDateSelect(dateStr)}
+                onMouseEnter={(e) => { if(isClickable) e.currentTarget.style.transform = 'scale(1.1)'; }}
+                onMouseLeave={(e) => { if(isClickable) e.currentTarget.style.transform = 'scale(1)'; }}
             >
                 {day}
             </div>
@@ -77,3 +87,4 @@ export const CalendarModal = ({ availableDates, onClose, onDateSelect, selectabl
         </div>
     );
 };
+

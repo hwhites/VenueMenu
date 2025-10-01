@@ -1,182 +1,211 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { User } from '@supabase/supabase-js'
+import { User, Session } from '@supabase/supabase-js'
 import Link from 'next/link'
 import * as React from 'react'
+import { styles } from '../styles/layout'
 
+// --- Type Definitions ---
 interface NavOption {
   name: string
   href: string
 }
 
-// FIX: Define the shape of the object returned by the 'get_user_conversations' RPC
-interface ConversationSummary {
-  conversation_id: number;
-  other_user_id: string;
-  other_user_name: string;
-  last_message_body: string;
-  last_message_created_at: string;
-  has_unread: boolean;
+interface Notification {
+    id: number;
+    type: 'new_message' | 'offer_received' | 'gig_booked';
+    payload: {
+        conversation_id?: number;
+        offer_id?: number;
+        booking_id?: number;
+        sender_id?: string;
+        booker_id?: string;
+    };
+    created_at: string;
+    actor_name: string;
+    actor_id: string;
 }
 
 export default function Header() {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<'artist' | 'venue' | null>(null)
-  const [hasUnread, setHasUnread] = useState(false) // State for notification
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
 
-  // Function to determine which links to show based on user role
-  const getMenuLinks = (userRole: string | null): NavOption[] => {
-    const coreLinks = [
-      { name: 'Home', href: '/' },
-      { name: 'Inbox', href: '/messages' },
-    ]
-
-    if (userRole === 'artist') {
-      const artistLinks = [
-        { name: 'Availability', href: '/availability' },
-        { name: 'Find Venues', href: '/discover-venues' },
-      ]
-      return [...coreLinks, ...artistLinks]
-    } else if (userRole === 'venue') {
-      const venueLinks = [
-        { name: 'Date Needs', href: '/needs' },
-        { name: 'Find Artists', href: '/discover' },
-      ]
-      return [...coreLinks, ...venueLinks]
-    }
-    // Links for logged-out users
-    return [
-      { name: 'Home', href: '/' },
-      { name: 'Log In', href: '/login' },
-      { name: 'Sign Up', href: '/signup' },
-    ]
-  }
-
-  // Links for the user's personal dashboard and settings
-  const settingsLinks: NavOption[] = [
-    { name: 'Dashboard', href: '/account' }, // Renamed for clarity
-    { name: 'My Bookings', href: '/bookings' },
-  ]
-
-  // Artist-specific settings link
-  const artistSettingsLinks: NavOption[] = [
-    { name: 'Edit Public Profile', href: '/edit-profile' },
-  ]
-
-  const handleLinkClick = () => {
-    setIsMenuOpen(false)
-  }
-
+  // --- FIX: Consolidated and robust useEffect hook ---
   useEffect(() => {
-    const fetchUserAndRole = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setUser(session?.user ?? null)
+    let intervalId: NodeJS.Timeout | null = null;
 
-      if (session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-        setRole(profile?.role || null)
+    // A single function to handle all user state changes
+    const handleAuthStateChange = async (session: Session | null) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
 
-        // Check for unread messages
-        const { data: convos } = await supabase.rpc('get_user_conversations', { p_user_id: session.user.id })
-        // FIX: Explicitly type the parameter 'c' to resolve the 'any' type error
-        if (convos && convos.some((c: ConversationSummary) => c.has_unread)) {
-          setHasUnread(true)
+        // Clear any existing polling interval
+        if (intervalId) clearInterval(intervalId);
+
+        if (currentUser) {
+            // If user is logged in, fetch their profile and notifications
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', currentUser.id).single();
+            setRole(profile?.role || null);
+
+            const fetchNotifications = async () => {
+                const { data, error } = await supabase.rpc('get_unread_notifications', { p_user_id: currentUser.id });
+                if (error) console.error("Error fetching notifications:", error);
+                else setNotifications(data || []);
+            };
+            
+            await fetchNotifications(); // Fetch once immediately
+            intervalId = setInterval(fetchNotifications, 15000); // Set a new interval for polling
         } else {
-          setHasUnread(false)
+            // If user is logged out, clear all related state
+            setRole(null);
+            setNotifications([]);
         }
-      } else {
-        setRole(null)
-        setHasUnread(false)
-      }
-    }
+    };
 
-    fetchUserAndRole()
-
-    // Listen for auth changes to re-fetch data
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-        fetchUserAndRole();
+    // Check the session on initial component mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        handleAuthStateChange(session);
     });
 
+    // Set up the listener for subsequent auth events (login, logout)
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        handleAuthStateChange(session);
+    });
+
+    // Cleanup function to unsubscribe and clear interval when the component unmounts
     return () => {
         authListener.subscription.unsubscribe();
+        if (intervalId) clearInterval(intervalId);
     };
-  }, [])
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+  
+  // Close dropdowns if clicking outside the header
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
+              setIsNotificationsOpen(false);
+              setIsMenuOpen(false);
+          }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+
+  const handleBellClick = async () => {
+    if (!user) return;
+    setIsMenuOpen(false);
+    const newOpenState = !isNotificationsOpen;
+    setIsNotificationsOpen(newOpenState);
+
+    if (newOpenState && notifications.length > 0) {
+      await supabase.rpc('mark_notifications_as_read', { p_user_id: user.id });
+      setTimeout(() => setNotifications([]), 3000);
+    }
+  };
+  
+  const handleHamburgerClick = () => {
+      setIsNotificationsOpen(false);
+      setIsMenuOpen(!isMenuOpen);
+  }
+
+  const generateNotificationTextAndLink = (n: Notification): { text: string, href: string } => {
+      const otherUserId = n.payload.sender_id || n.payload.booker_id || n.actor_id;
+      switch (n.type) {
+          case 'new_message':
+              return { text: `${n.actor_name} sent you a message.`, href: `/messages/${otherUserId}`};
+          case 'offer_received':
+              return { text: `${n.actor_name} sent you an offer.`, href: `/messages/${otherUserId}`};
+          case 'gig_booked':
+              return { text: `${n.actor_name} booked your Instant Gig!`, href: '/bookings' };
+          default:
+              return { text: 'You have a new notification.', href: '/' };
+      }
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     window.location.href = '/'
   }
+  
+  const menuLinks = role === 'artist'
+    ? [ { name: 'Find Venues', href: '/discover-venues' }, { name: 'My Availability', href: '/availability' } ]
+    : role === 'venue'
+    ? [ { name: 'Find Artists', href: '/discover' }, { name: 'My Date Needs', href: '/needs' } ]
+    : [];
+    
+  const coreLinks = [
+      { name: 'Dashboard', href: '/account' },
+      { name: 'My Bookings', href: '/bookings' },
+      { name: 'Inbox', href: '/messages' },
+      { name: 'Post an Instant Gig', href: '/post-gig' },
+  ];
+  
+  if (role === 'artist') coreLinks.push({ name: 'Edit Public Profile', href: '/edit-profile' });
 
-  const menuLinks = getMenuLinks(role)
 
   return (
-    <header style={{ backgroundColor: '#111827', padding: '1rem', color: '#f9fafb', position: 'sticky', top: 0, zIndex: 100 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', maxWidth: '1200px', margin: '0 auto' }}>
-        <Link href="/" style={{ color: '#f9fafb', fontSize: '1.5rem', fontWeight: 'bold', textDecoration: 'none' }}>
-          VenueMenu
-        </Link>
-
-        <div className="flex">
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} style={{ background: '#1f2937', border: '1px solid #4b5563', borderRadius: '4px', color: '#f9fafb', fontSize: '1.5rem', cursor: 'pointer', padding: '0.25rem 0.5rem' }}>
-            {isMenuOpen ? '✕' : '☰'}
-          </button>
+    <header ref={headerRef} style={styles.header as React.CSSProperties}>
+      <div style={styles.headerContainer as React.CSSProperties}>
+        <Link href="/" style={styles.logo as React.CSSProperties}>VenueMenu</Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {user && (
+                <div ref={notificationRef} style={{ position: 'relative' }}>
+                    <button onClick={handleBellClick} style={styles.notificationButton as React.CSSProperties}>
+                        🔔
+                        {notifications.length > 0 && (
+                            <span style={styles.notificationCount as React.CSSProperties}>{notifications.length}</span>
+                        )}
+                    </button>
+                    {isNotificationsOpen && (
+                        <div style={styles.notificationDropdown as React.CSSProperties}>
+                            {notifications.length > 0 ? notifications.map(n => {
+                                const { text, href } = generateNotificationTextAndLink(n);
+                                return (
+                                    <Link key={n.id} href={href} onClick={() => setIsNotificationsOpen(false)} style={styles.notificationItem as React.CSSProperties}>
+                                        <p style={{ margin: 0, fontWeight: 'bold' }}>{text}</p>
+                                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.8rem', opacity: 0.7 }}>
+                                            {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </Link>
+                                );
+                            }) : <div style={styles.notificationItem as React.CSSProperties}>No new notifications</div>}
+                        </div>
+                    )}
+                </div>
+            )}
+            <button onClick={handleHamburgerClick} style={styles.hamburgerButton as React.CSSProperties}>
+                {isMenuOpen ? '✕' : '☰'}
+            </button>
         </div>
       </div>
 
       {isMenuOpen && (
-        <div style={{ backgroundColor: '#1f2937', position: 'absolute', top: '59px', right: 0, width: '100%', maxWidth: '280px', padding: '1rem 0', zIndex: 40, boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' } as React.CSSProperties}>
-          {/* Core Navigation Links */}
-          {menuLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              onClick={handleLinkClick}
-              style={{ display: 'block', padding: '0.75rem 1rem', color: '#f9fafb', textDecoration: 'none', borderBottom: '1px solid #374151', position: 'relative' }}
-              onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#374151')}
-              onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#1f2937')}
-            >
-              {link.name}
-              {/* Notification Dot for Inbox */}
-              {link.name === 'Inbox' && hasUnread && (
-                <span style={{ position: 'absolute', top: '1rem', right: '1rem', height: '8px', width: '8px', backgroundColor: '#3b82f6', borderRadius: '50%' }}></span>
-              )}
-            </Link>
-          ))}
-
-          {user && (
-            <>
-              {/* Account, Bookings, and other settings links */}
-              {[...settingsLinks, ...(role === 'artist' ? artistSettingsLinks : [])].map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  onClick={handleLinkClick}
-                  style={{ display: 'block', padding: '0.75rem 1rem', color: '#f9fafb', textDecoration: 'none', borderBottom: '1px solid #374151' }}
-                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#374151')}
-                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#1f2937')}
-                >
-                  {link.name}
-                </Link>
-              ))}
-
-              {/* Logout Button */}
-              <button
-                onClick={handleLogout}
-                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', color: '#f87171', padding: '0.75rem 1rem', cursor: 'pointer', fontSize: '1rem' }}
-                onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#374151')}
-                onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#1f2937')}
-              >
-                Log Out
-              </button>
-            </>
-          )}
+        <div style={styles.mobileMenu as React.CSSProperties}>
+            {user ? (
+                <>
+                    {[...coreLinks, ...menuLinks].map(link => (
+                        <Link key={link.name} href={link.href} onClick={() => setIsMenuOpen(false)} style={styles.mobileMenuItem as React.CSSProperties}>{link.name}</Link>
+                    ))}
+                    <button onClick={handleLogout} style={{...styles.mobileMenuItem as React.CSSProperties, background: 'none', border: 'none', color: '#f87171', textAlign: 'left', width: '100%', cursor: 'pointer', fontSize: 'inherit' }}>
+                        Log Out
+                    </button>
+                </>
+            ) : (
+                <>
+                    <Link href="/login" onClick={() => setIsMenuOpen(false)} style={styles.mobileMenuItem as React.CSSProperties}>Log In</Link>
+                    <Link href="/signup" onClick={() => setIsMenuOpen(false)} style={styles.mobileMenuItem as React.CSSProperties}>Sign Up</Link>
+                </>
+            )}
         </div>
       )}
     </header>
