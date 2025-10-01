@@ -163,7 +163,7 @@ export default function BookingDetailPage() {
                 onConfirm={() => handleConfirmCancellation(userRole === 'venue')}
                 onCancel={() => setIsCancelling(false)}
                 // FIX: Replaced single quotes with the HTML entity &apos;
-                message={userRole === 'venue' ? "This will mark the booking as 'Canceled by Artist'. Are you sure?" : "This action cannot be undone. The other party will be notified."}
+                message={userRole === 'venue' ? "This will mark the booking as &apos;'Canceled by Artist&apos;'. Are you sure?" : "This action cannot be undone. The other party will be notified."}
             />
         )}
     </>
